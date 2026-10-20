@@ -1,7 +1,12 @@
 """测评：试卷、发布、答卷、成绩、证书。"""
+import io
+import os
+import zipfile
 from decimal import Decimal, ROUND_HALF_UP
+from urllib.parse import quote
 
 from django.db import transaction
+from django.http import StreamingHttpResponse
 from rest_framework.decorators import action
 
 from apps.common.exceptions import ApiException
@@ -21,7 +26,7 @@ from apps.exam.serializers import (
     PaperSerializer,
     PublishCreateSerializer,
 )
-from apps.questionbank.models import Course, Question
+from apps.questionbank.models import Course, Question, QuestionResource
 from apps.users.models import User
 
 
@@ -187,6 +192,58 @@ class PaperViewSet(BaseViewSet):
             paper.save(update_fields=["status", "total_score"])
 
         return ApiResponse(PaperDetailSerializer(paper).data, message="暂存成功")
+
+    @action(detail=True, methods=["get"], url_path="materials")
+    def materials(self, request, pk=None):
+        """下载试卷音频/图片材料（内存 zip 打包）。"""
+        paper = self.get_object()
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            paper_questions = paper.paper_questions.select_related(
+                "question",
+            ).prefetch_related("question__resources").order_by("sort")
+            for pq in paper_questions:
+                question = pq.question
+                for res in question.resources.all():
+                    if res.rtype not in (
+                        QuestionResource.RESOURCE_AUDIO,
+                        QuestionResource.RESOURCE_IMAGE,
+                    ):
+                        continue
+                    base = os.path.basename(res.file.name) or "file"
+                    arcname = f"{pq.sort:03d}_{res.rtype}_{base}"
+                    with res.file.open("rb") as fh:
+                        zf.writestr(arcname, fh.read())
+
+        filename = f"{paper.title}_材料.zip"
+        response = StreamingHttpResponse(iter([buf.getvalue()]), content_type="application/zip")
+        response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
+        return response
+
+    @action(detail=True, methods=["get"], url_path="answers")
+    def answers(self, request, pk=None):
+        """下载试卷答案（纯文本 .txt）。"""
+        paper = self.get_object()
+
+        lines = [f"试卷：{paper.title}", f"学科：{paper.get_subject_display()}", ""]
+        paper_questions = paper.paper_questions.select_related("question").order_by("sort")
+        for pq in paper_questions:
+            question = pq.question
+            qtype_label = dict(Question.TYPE_CHOICES).get(question.qtype, question.qtype)
+            lines.append(f"{pq.sort}. 【{qtype_label}】{question.stem}")
+            lines.append(f"参考答案：{question.answer or '（无）'}")
+            if question.analysis:
+                lines.append(f"解析：{question.analysis}")
+            lines.append("")
+
+        content = "\n".join(lines)
+        filename = f"{paper.title}_答案.txt"
+        response = StreamingHttpResponse(
+            iter([content.encode("utf-8")]), content_type="text/plain; charset=utf-8",
+        )
+        response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
+        return response
 
 
 class PaperQuestionViewSet(BaseViewSet):
