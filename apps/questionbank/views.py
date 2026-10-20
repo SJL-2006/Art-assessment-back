@@ -1,4 +1,5 @@
 """题库：课程、章节、试题及其嵌套资源与审核接口。"""
+from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 
 from apps.common.exceptions import ApiException
@@ -79,6 +80,10 @@ class QuestionViewSet(BaseViewSet):
                 qs = qs.filter(**{field: value})
         return qs
 
+    @extend_schema(
+        request=QuestionResourceSerializer,
+        responses={201: QuestionResourceSerializer},
+    )
     @action(detail=True, methods=["post"], url_path="resources")
     def upload_resource(self, request, pk=None):
         """上传试题资源（音频/图片/视频）。"""
@@ -88,6 +93,7 @@ class QuestionViewSet(BaseViewSet):
         serializer.save(question=question)
         return ApiResponse(serializer.data, message="资源上传成功", status=201)
 
+    @extend_schema(responses={200: None})
     def delete_resource(self, request, pk=None, rid=None):
         """删除指定试题资源。"""
         question = self.get_object()
@@ -98,6 +104,10 @@ class QuestionViewSet(BaseViewSet):
         resource.delete()
         return ApiResponse(None, message="资源删除成功")
 
+    @extend_schema(
+        request=ReviewRequestSerializer,
+        responses={200: QuestionReviewSerializer},
+    )
     @action(detail=True, methods=["post"], url_path="review")
     def review_question(self, request, pk=None):
         """审核试题（通过/驳回）。"""
@@ -123,6 +133,9 @@ class QuestionViewSet(BaseViewSet):
         )
         return ApiResponse(QuestionReviewSerializer(review).data, message="审核完成")
 
+    @extend_schema(
+        responses={200: QuestionReviewSerializer(many=True)},
+    )
     @action(detail=True, methods=["get"], url_path="reviews")
     def list_reviews(self, request, pk=None):
         """查询试题审核记录。"""

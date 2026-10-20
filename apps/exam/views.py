@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 from django.db import transaction
 from django.http import StreamingHttpResponse
+from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action
 
 from apps.common.exceptions import ApiException
@@ -95,6 +96,10 @@ class PaperViewSet(BaseViewSet):
         scores[-1] = total - sum(scores[:-1])
         return scores
 
+    @extend_schema(
+        request=AutoGenerateRequestSerializer,
+        responses={201: PaperDetailSerializer},
+    )
     @action(detail=False, methods=["post"], url_path="auto-generate")
     def auto_generate(self, request):
         """自动组卷：按学科/年级/章节/题型配置，从已通过题库随机抽题。"""
@@ -163,6 +168,10 @@ class PaperViewSet(BaseViewSet):
 
         return ApiResponse(PaperDetailSerializer(paper).data, message="自动组卷成功", status=201)
 
+    @extend_schema(
+        request=DraftRequestSerializer,
+        responses={200: PaperDetailSerializer},
+    )
     @action(detail=True, methods=["post"], url_path="draft")
     def draft(self, request, pk=None):
         """暂存试卷：按传入顺序重建试题关联，并置为草稿。"""
@@ -193,6 +202,9 @@ class PaperViewSet(BaseViewSet):
 
         return ApiResponse(PaperDetailSerializer(paper).data, message="暂存成功")
 
+    @extend_schema(
+        responses={(200, "application/zip"): OpenApiTypes.BINARY},
+    )
     @action(detail=True, methods=["get"], url_path="materials")
     def materials(self, request, pk=None):
         """下载试卷音频/图片材料（内存 zip 打包）。"""
@@ -221,6 +233,9 @@ class PaperViewSet(BaseViewSet):
         response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
         return response
 
+    @extend_schema(
+        responses={(200, "text/plain"): OpenApiTypes.STR},
+    )
     @action(detail=True, methods=["get"], url_path="answers")
     def answers(self, request, pk=None):
         """下载试卷答案（纯文本 .txt）。"""
@@ -258,6 +273,10 @@ class PaperPublishViewSet(BaseViewSet):
     serializer_class = PaperPublishSerializer
     permission_classes = [has_role(*PAPER_ROLES)]
 
+    @extend_schema(
+        request=PublishCreateSerializer,
+        responses={201: PaperPublishSerializer},
+    )
     def create(self, request, *args, **kwargs):
         """发布试卷：校验 scope 后创建发布记录，并把 Paper 置为 published。"""
         serializer = PublishCreateSerializer(data=request.data)
@@ -283,6 +302,9 @@ class PaperPublishViewSet(BaseViewSet):
 
         return ApiResponse(PaperPublishSerializer(publish).data, message="发布成功", status=201)
 
+    @extend_schema(
+        responses={200: PaperPublishSerializer},
+    )
     @action(detail=True, methods=["post"], url_path="recall")
     def recall(self, request, pk=None):
         """撤回发布：若无其它已发布记录，Paper 置回 draft。"""

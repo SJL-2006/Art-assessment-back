@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
 
@@ -15,6 +16,7 @@ class RegisterView(generics.CreateAPIView):
 class CurrentUserView(APIView):
     """当前登录用户信息。"""
 
+    @extend_schema(responses={200: UserSerializer})
     def get(self, request):
         return ApiResponse(UserSerializer(request.user).data)
 
@@ -22,6 +24,7 @@ class CurrentUserView(APIView):
 class ChangePasswordView(APIView):
     """修改密码。"""
 
+    @extend_schema(request=ChangePasswordSerializer, responses={200: None})
     def post(self, request):
         ser = ChangePasswordSerializer(data=request.data)
         ser.is_valid(raise_exception=True)

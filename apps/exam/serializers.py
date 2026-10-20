@@ -16,7 +16,7 @@ class PaperSerializer(serializers.ModelSerializer):
         model = Paper
         fields = "__all__"
 
-    def get_question_count(self, obj):
+    def get_question_count(self, obj) -> int:
         return obj.paper_questions.count()
 
 
@@ -46,7 +46,7 @@ class PaperDetailSerializer(serializers.ModelSerializer):
         model = Paper
         fields = "__all__"
 
-    def get_question_count(self, obj):
+    def get_question_count(self, obj) -> int:
         return obj.paper_questions.count()
 
 
