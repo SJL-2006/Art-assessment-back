@@ -7,6 +7,7 @@ class BaseModel(models.Model):
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
     is_deleted = models.BooleanField("是否删除", default=False)
+    deleted_at = models.DateTimeField("删除时间", null=True, blank=True)
 
     class Meta:
         abstract = True
