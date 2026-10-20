@@ -64,7 +64,7 @@ class ClassRoomViewSet(BaseViewSet):
         if self.action in ("join", "quit", "change"):
             return [has_role(User.ROLE_STUDENT)()]
         # 教师专属 action
-        if self.action in ("approve_student", "approve_teacher"):
+        if self.action in ("approve_student", "approve_teacher", "join_teacher"):
             return [has_role(User.ROLE_TEACHER)()]
         # 教师/学校都可
         if self.action in ("list", "create", "update", "partial_update", "destroy", "import_students"):
@@ -102,7 +102,10 @@ class ClassRoomViewSet(BaseViewSet):
 
     def _get_raw_class(self, pk):
         """绕过 get_queryset 的角色过滤，直接取 ClassRoom（供班级内业务操作使用）。"""
-        klass = ClassRoom.objects.filter(is_deleted=False, pk=pk).first()
+        try:
+            klass = ClassRoom.objects.filter(is_deleted=False, pk=pk).first()
+        except (ValueError, TypeError):
+            klass = None
         if not klass:
             raise ApiException("班级不存在", code=404, status=404)
         return klass
@@ -127,6 +130,36 @@ class ClassRoomViewSet(BaseViewSet):
 
         cs = ClassStudent.objects.create(klass=klass, student=request.user, status=PENDING)
         return ApiResponse(ClassStudentSerializer(cs).data, message="申请已提交", status=201)
+
+    # -------------------- 教师申请加入班级（科任教师） --------------------
+
+    @action(detail=True, methods=["post"], url_path="join-teacher")
+    def join_teacher(self, request, pk=None):
+        """教师申请加入指定班级担任科任教师（写入 pending 状态的 ClassTeacher）。
+
+        对应接口文档 #26 审核科任教师申请的前置提交接口。
+        """
+        klass = self._get_raw_class(pk)
+        # 不能申请自己当班主任的班级
+        if klass.head_teacher_id == request.user.id:
+            raise ApiException("你已是该班级班主任")
+        # 同一学校才能加入
+        if klass.school_id != request.user.school_id:
+            raise ApiException("只能加入本校班级", code=403, status=403)
+
+        ct = ClassTeacher.objects.filter(klass=klass, teacher=request.user, is_deleted=False).first()
+        if ct:
+            if ct.status == APPROVED:
+                raise ApiException("你已是该班级科任教师")
+            if ct.status == PENDING:
+                raise ApiException("已有待审核申请，请等待班主任处理")
+            # rejected → 允许重新申请
+            ct.status = PENDING
+            ct.save(update_fields=["status", "updated_at"])
+            return ApiResponse(ClassTeacherSerializer(ct).data, message="已重新提交申请")
+
+        ct = ClassTeacher.objects.create(klass=klass, teacher=request.user, status=PENDING)
+        return ApiResponse(ClassTeacherSerializer(ct).data, message="科任教师申请已提交", status=201)
 
     # -------------------- #23 学生退出 --------------------
 
