@@ -2,7 +2,9 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from apps.classroom.models import ClassRoom
 from apps.exam.models import Answer, AnswerSheet, Certificate, Paper, PaperPublish, PaperQuestion
+from apps.org.models import Region, School
 from apps.questionbank.models import Question
 from apps.questionbank.serializers import QuestionSerializer
 
@@ -108,3 +110,42 @@ class DraftRequestSerializer(serializers.Serializer):
     question_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1), allow_empty=False,
     )
+
+
+class PublishCreateSerializer(serializers.Serializer):
+    """发布试卷请求体：含 scope 交叉校验。"""
+
+    paper = serializers.PrimaryKeyRelatedField(queryset=Paper.objects.all())
+    scope_type = serializers.ChoiceField(choices=PaperPublish.SCOPE_CHOICES)
+    target_school = serializers.PrimaryKeyRelatedField(
+        queryset=School.objects.all(), required=False, allow_null=True,
+    )
+    target_class = serializers.PrimaryKeyRelatedField(
+        queryset=ClassRoom.objects.all(), required=False, allow_null=True,
+    )
+    target_region = serializers.PrimaryKeyRelatedField(
+        queryset=Region.objects.all(), required=False, allow_null=True,
+    )
+    grade = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    start_at = serializers.DateTimeField(required=False, allow_null=True)
+    end_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        paper = attrs["paper"]
+        if paper.status not in (Paper.STATUS_DRAFT, Paper.STATUS_PUBLISHED):
+            raise serializers.ValidationError({"paper": "试卷状态必须为草稿或已发布才能发布"})
+
+        scope_type = attrs["scope_type"]
+        if scope_type == PaperPublish.SCOPE_CLASS:
+            if not attrs.get("target_school"):
+                raise serializers.ValidationError({"target_school": "scope_type=class 时 target_school 必填"})
+            if not attrs.get("target_class"):
+                raise serializers.ValidationError({"target_class": "scope_type=class 时 target_class 必填"})
+        elif scope_type == PaperPublish.SCOPE_SCHOOL:
+            if not attrs.get("target_school"):
+                raise serializers.ValidationError({"target_school": "scope_type=school 时 target_school 必填"})
+        elif scope_type == PaperPublish.SCOPE_REGION:
+            if not attrs.get("target_region"):
+                raise serializers.ValidationError({"target_region": "scope_type=region 时 target_region 必填"})
+        # scope_type=grade：无必填 target，grade 可选
+        return attrs

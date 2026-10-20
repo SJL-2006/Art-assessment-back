@@ -104,6 +104,7 @@ class PaperPublish(BaseModel):
         Paper, on_delete=models.CASCADE, related_name="publishes", verbose_name="试卷",
     )
     scope_type = models.CharField("发布范围类型", max_length=16, choices=SCOPE_CHOICES)
+    grade = models.CharField("年级", max_length=32, blank=True, default="")
     target_school = models.ForeignKey(
         "org.School", on_delete=models.SET_NULL, null=True, blank=True, verbose_name="目标学校",
     )

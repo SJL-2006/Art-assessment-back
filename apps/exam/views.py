@@ -19,6 +19,7 @@ from apps.exam.serializers import (
     PaperPublishSerializer,
     PaperQuestionSerializer,
     PaperSerializer,
+    PublishCreateSerializer,
 )
 from apps.questionbank.models import Course, Question
 from apps.users.models import User
@@ -195,9 +196,48 @@ class PaperQuestionViewSet(BaseViewSet):
 
 
 class PaperPublishViewSet(BaseViewSet):
-    """试卷发布。"""
+    """试卷发布（含 scope 参数化发布与撤回）。"""
     queryset = PaperPublish.objects.all()
     serializer_class = PaperPublishSerializer
+    permission_classes = [has_role(*PAPER_ROLES)]
+
+    def create(self, request, *args, **kwargs):
+        """发布试卷：校验 scope 后创建发布记录，并把 Paper 置为 published。"""
+        serializer = PublishCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        paper = data["paper"]
+
+        with transaction.atomic():
+            publish = PaperPublish.objects.create(
+                paper=paper,
+                scope_type=data["scope_type"],
+                grade=data.get("grade", ""),
+                target_school=data.get("target_school"),
+                target_class=data.get("target_class"),
+                target_region=data.get("target_region"),
+                start_at=data.get("start_at"),
+                end_at=data.get("end_at"),
+                status=PaperPublish.STATUS_PUBLISHED,
+            )
+            paper.status = Paper.STATUS_PUBLISHED
+            paper.save(update_fields=["status"])
+
+        return ApiResponse(PaperPublishSerializer(publish).data, message="发布成功", status=201)
+
+    @action(detail=True, methods=["post"], url_path="recall")
+    def recall(self, request, pk=None):
+        """撤回发布：若无其它已发布记录，Paper 置回 draft。"""
+        publish = self.get_object()
+        with transaction.atomic():
+            publish.status = PaperPublish.STATUS_RECALLED
+            publish.save(update_fields=["status"])
+            paper = publish.paper
+            if not paper.publishes.filter(status=PaperPublish.STATUS_PUBLISHED).exists():
+                paper.status = Paper.STATUS_DRAFT
+                paper.save(update_fields=["status"])
+        return ApiResponse(PaperPublishSerializer(publish).data, message="撤回成功")
 
 
 class AnswerSheetViewSet(BaseViewSet):
