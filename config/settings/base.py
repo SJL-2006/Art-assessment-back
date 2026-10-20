@@ -148,6 +148,7 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "艺术测评系统后端接口文档",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "POSTPROCESSING_HOOKS": ["apps.common.schema.chinese_postprocess"],
 }
 
 # ---------------- 业务 ----------------
