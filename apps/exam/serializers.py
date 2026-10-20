@@ -1,6 +1,10 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from apps.exam.models import Answer, AnswerSheet, Certificate, Paper, PaperPublish, PaperQuestion
+from apps.questionbank.models import Question
+from apps.questionbank.serializers import QuestionSerializer
 
 
 class PaperSerializer(serializers.ModelSerializer):
@@ -18,6 +22,30 @@ class PaperQuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaperQuestion
         fields = "__all__"
+
+
+class PaperQuestionDetailSerializer(serializers.ModelSerializer):
+    """试卷试题（含完整题目内容）。"""
+
+    question = QuestionSerializer(read_only=True)
+
+    class Meta:
+        model = PaperQuestion
+        fields = "__all__"
+
+
+class PaperDetailSerializer(serializers.ModelSerializer):
+    """试卷详情（含完整题目）。"""
+
+    paper_questions = PaperQuestionDetailSerializer(many=True, read_only=True)
+    question_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Paper
+        fields = "__all__"
+
+    def get_question_count(self, obj):
+        return obj.paper_questions.count()
 
 
 class PaperPublishSerializer(serializers.ModelSerializer):
@@ -42,3 +70,41 @@ class CertificateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Certificate
         fields = "__all__"
+
+
+class QtypeConfigSerializer(serializers.Serializer):
+    """自动组卷：单种题型的抽题配置。"""
+
+    qtype = serializers.ChoiceField(choices=Question.TYPE_CHOICES)
+    count = serializers.IntegerField(min_value=1)
+    difficulty = serializers.ChoiceField(choices=Question.DIFFICULTY_CHOICES)
+
+
+class AutoGenerateRequestSerializer(serializers.Serializer):
+    """自动组卷请求体。"""
+
+    subject = serializers.ChoiceField(choices=Paper.SUBJECT_CHOICES)
+    grade = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    chapter_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), required=False, allow_empty=True,
+    )
+    qtype_config = QtypeConfigSerializer(many=True)
+    total_score = serializers.DecimalField(
+        required=False, max_digits=6, decimal_places=2, min_value=Decimal("0"),
+    )
+    title = serializers.CharField(max_length=128)
+    ptype = serializers.ChoiceField(choices=Paper.TYPE_CHOICES, required=False)
+    level = serializers.ChoiceField(choices=Paper.LEVEL_CHOICES, required=False)
+
+    def validate_qtype_config(self, value):
+        if not value:
+            raise serializers.ValidationError("qtype_config 不能为空")
+        return value
+
+
+class DraftRequestSerializer(serializers.Serializer):
+    """暂存试卷请求体：按顺序重建试题关联。"""
+
+    question_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), allow_empty=False,
+    )
