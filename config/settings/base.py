@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     # 第三方
     "rest_framework",
     "corsheaders",
+    "drf_spectacular",
     # 业务应用
     "apps.common",
     "apps.org",
@@ -108,6 +109,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------- DRF ----------------
 REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
@@ -139,6 +141,15 @@ SIMPLE_JWT = {
 # ---------------- CORS ----------------
 # 开发期放开；生产请改为白名单（如 CORS_ALLOWED_ORIGINS = [...]）
 CORS_ALLOW_ALL_ORIGINS = True
+
+# ---------------- OpenAPI / Swagger ----------------
+SPECTACULAR_SETTINGS = {
+    "TITLE": "艺术测评系统 API",
+    "DESCRIPTION": "艺术测评系统后端接口文档",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "POSTPROCESSING_HOOKS": ["apps.common.schema.chinese_postprocess"],
+}
 
 # ---------------- 业务 ----------------
 # 操作日志中间件开关（可在 .env 中覆盖）

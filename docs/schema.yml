@@ -1,0 +1,5278 @@
+openapi: 3.0.3
+info:
+  title: 艺术测评系统 API
+  version: 1.0.0
+  description: 艺术测评系统后端接口文档
+paths:
+  /api/auth/login/:
+    post:
+      operationId: api_auth_login_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - 认证
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+      summary: 登录
+  /api/auth/refresh/:
+    post:
+      operationId: api_auth_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - 认证
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+      summary: 刷新令牌
+  /api/classroom/class-students/:
+    get:
+      operationId: api_classroom_class_students_list
+      description: 班级学生关系。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 班级
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedClassStudentList'
+          description: ''
+      summary: 班级学生列表
+    post:
+      operationId: api_classroom_class_students_create
+      description: 班级学生关系。
+      tags:
+      - 班级
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassStudent'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassStudent'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassStudent'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassStudent'
+          description: ''
+      summary: 新增班级学生
+  /api/classroom/class-students/{id}/:
+    get:
+      operationId: api_classroom_class_students_retrieve
+      description: 班级学生关系。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级学生.
+        required: true
+      tags:
+      - 班级
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassStudent'
+          description: ''
+      summary: 班级学生详情
+    put:
+      operationId: api_classroom_class_students_update
+      description: 班级学生关系。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级学生.
+        required: true
+      tags:
+      - 班级
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassStudent'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassStudent'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassStudent'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassStudent'
+          description: ''
+      summary: 更新班级学生
+    patch:
+      operationId: api_classroom_class_students_partial_update
+      description: 班级学生关系。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级学生.
+        required: true
+      tags:
+      - 班级
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedClassStudent'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedClassStudent'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedClassStudent'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassStudent'
+          description: ''
+      summary: 更新班级学生
+    delete:
+      operationId: api_classroom_class_students_destroy
+      description: 班级学生关系。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级学生.
+        required: true
+      tags:
+      - 班级
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除班级学生
+  /api/classroom/class-teachers/:
+    get:
+      operationId: api_classroom_class_teachers_list
+      description: 班级教师关系。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 班级
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedClassTeacherList'
+          description: ''
+      summary: 班级教师列表
+    post:
+      operationId: api_classroom_class_teachers_create
+      description: 班级教师关系。
+      tags:
+      - 班级
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassTeacher'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassTeacher'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassTeacher'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassTeacher'
+          description: ''
+      summary: 新增班级教师
+  /api/classroom/class-teachers/{id}/:
+    get:
+      operationId: api_classroom_class_teachers_retrieve
+      description: 班级教师关系。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级教师.
+        required: true
+      tags:
+      - 班级
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassTeacher'
+          description: ''
+      summary: 班级教师详情
+    put:
+      operationId: api_classroom_class_teachers_update
+      description: 班级教师关系。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级教师.
+        required: true
+      tags:
+      - 班级
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassTeacher'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassTeacher'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassTeacher'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassTeacher'
+          description: ''
+      summary: 更新班级教师
+    patch:
+      operationId: api_classroom_class_teachers_partial_update
+      description: 班级教师关系。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级教师.
+        required: true
+      tags:
+      - 班级
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedClassTeacher'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedClassTeacher'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedClassTeacher'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassTeacher'
+          description: ''
+      summary: 更新班级教师
+    delete:
+      operationId: api_classroom_class_teachers_destroy
+      description: 班级教师关系。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级教师.
+        required: true
+      tags:
+      - 班级
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除班级教师
+  /api/classroom/classes/:
+    get:
+      operationId: api_classroom_classes_list
+      description: 班级 CRUD。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 班级
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedClassRoomList'
+          description: ''
+      summary: 班级列表
+    post:
+      operationId: api_classroom_classes_create
+      description: 班级 CRUD。
+      tags:
+      - 班级
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassRoom'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassRoom'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassRoom'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassRoom'
+          description: ''
+      summary: 新增班级
+  /api/classroom/classes/{id}/:
+    get:
+      operationId: api_classroom_classes_retrieve
+      description: 班级 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级.
+        required: true
+      tags:
+      - 班级
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassRoom'
+          description: ''
+      summary: 班级详情
+    put:
+      operationId: api_classroom_classes_update
+      description: 班级 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级.
+        required: true
+      tags:
+      - 班级
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassRoom'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClassRoom'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ClassRoom'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassRoom'
+          description: ''
+      summary: 更新班级
+    patch:
+      operationId: api_classroom_classes_partial_update
+      description: 班级 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级.
+        required: true
+      tags:
+      - 班级
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedClassRoom'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedClassRoom'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedClassRoom'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassRoom'
+          description: ''
+      summary: 更新班级
+    delete:
+      operationId: api_classroom_classes_destroy
+      description: 班级 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 班级.
+        required: true
+      tags:
+      - 班级
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除班级
+  /api/exam/answer-sheets/:
+    get:
+      operationId: api_exam_answer_sheets_list
+      description: 答卷。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 答卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAnswerSheetList'
+          description: ''
+      summary: 答卷列表
+    post:
+      operationId: api_exam_answer_sheets_create
+      description: 答卷。
+      tags:
+      - 答卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerSheet'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnswerSheet'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnswerSheet'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerSheet'
+          description: ''
+      summary: 新增答卷
+  /api/exam/answer-sheets/{id}/:
+    get:
+      operationId: api_exam_answer_sheets_retrieve
+      description: 答卷。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 答卷.
+        required: true
+      tags:
+      - 答卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerSheet'
+          description: ''
+      summary: 答卷详情
+    put:
+      operationId: api_exam_answer_sheets_update
+      description: 答卷。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 答卷.
+        required: true
+      tags:
+      - 答卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerSheet'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnswerSheet'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnswerSheet'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerSheet'
+          description: ''
+      summary: 更新答卷
+    patch:
+      operationId: api_exam_answer_sheets_partial_update
+      description: 答卷。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 答卷.
+        required: true
+      tags:
+      - 答卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAnswerSheet'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAnswerSheet'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAnswerSheet'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerSheet'
+          description: ''
+      summary: 更新答卷
+    delete:
+      operationId: api_exam_answer_sheets_destroy
+      description: 答卷。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 答卷.
+        required: true
+      tags:
+      - 答卷
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除答卷
+  /api/exam/answers/:
+    get:
+      operationId: api_exam_answers_list
+      description: 答题明细。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 答卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAnswerList'
+          description: ''
+      summary: 答题明细列表
+    post:
+      operationId: api_exam_answers_create
+      description: 答题明细。
+      tags:
+      - 答卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Answer'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Answer'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Answer'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+          description: ''
+      summary: 新增答题明细
+  /api/exam/answers/{id}/:
+    get:
+      operationId: api_exam_answers_retrieve
+      description: 答题明细。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 答题明细.
+        required: true
+      tags:
+      - 答卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+          description: ''
+      summary: 答题明细详情
+    put:
+      operationId: api_exam_answers_update
+      description: 答题明细。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 答题明细.
+        required: true
+      tags:
+      - 答卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Answer'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Answer'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Answer'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+          description: ''
+      summary: 更新答题明细
+    patch:
+      operationId: api_exam_answers_partial_update
+      description: 答题明细。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 答题明细.
+        required: true
+      tags:
+      - 答卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAnswer'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAnswer'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAnswer'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+          description: ''
+      summary: 更新答题明细
+    delete:
+      operationId: api_exam_answers_destroy
+      description: 答题明细。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 答题明细.
+        required: true
+      tags:
+      - 答卷
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除答题明细
+  /api/exam/certificates/:
+    get:
+      operationId: api_exam_certificates_list
+      description: 证书。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 证书
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCertificateList'
+          description: ''
+      summary: 证书列表
+    post:
+      operationId: api_exam_certificates_create
+      description: 证书。
+      tags:
+      - 证书
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+          description: ''
+      summary: 新增证书
+  /api/exam/certificates/{id}/:
+    get:
+      operationId: api_exam_certificates_retrieve
+      description: 证书。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 证书.
+        required: true
+      tags:
+      - 证书
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+          description: ''
+      summary: 证书详情
+    put:
+      operationId: api_exam_certificates_update
+      description: 证书。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 证书.
+        required: true
+      tags:
+      - 证书
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+          description: ''
+      summary: 更新证书
+    patch:
+      operationId: api_exam_certificates_partial_update
+      description: 证书。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 证书.
+        required: true
+      tags:
+      - 证书
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCertificate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCertificate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCertificate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+          description: ''
+      summary: 更新证书
+    delete:
+      operationId: api_exam_certificates_destroy
+      description: 证书。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 证书.
+        required: true
+      tags:
+      - 证书
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除证书
+  /api/exam/paper-questions/:
+    get:
+      operationId: api_exam_paper_questions_list
+      description: 试卷试题关联。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaperQuestionList'
+          description: ''
+      summary: 试卷试题列表
+    post:
+      operationId: api_exam_paper_questions_create
+      description: 试卷试题关联。
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaperQuestion'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaperQuestion'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaperQuestion'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperQuestion'
+          description: ''
+      summary: 新增试卷试题
+  /api/exam/paper-questions/{id}/:
+    get:
+      operationId: api_exam_paper_questions_retrieve
+      description: 试卷试题关联。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷试题.
+        required: true
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperQuestion'
+          description: ''
+      summary: 试卷试题详情
+    put:
+      operationId: api_exam_paper_questions_update
+      description: 试卷试题关联。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷试题.
+        required: true
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaperQuestion'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaperQuestion'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaperQuestion'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperQuestion'
+          description: ''
+      summary: 更新试卷试题
+    patch:
+      operationId: api_exam_paper_questions_partial_update
+      description: 试卷试题关联。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷试题.
+        required: true
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPaperQuestion'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPaperQuestion'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPaperQuestion'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperQuestion'
+          description: ''
+      summary: 更新试卷试题
+    delete:
+      operationId: api_exam_paper_questions_destroy
+      description: 试卷试题关联。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷试题.
+        required: true
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除试卷试题
+  /api/exam/papers/:
+    get:
+      operationId: api_exam_papers_list
+      description: 试卷 CRUD，含自动组卷与暂存。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaperList'
+          description: ''
+      summary: 试卷列表
+    post:
+      operationId: api_exam_papers_create
+      description: 试卷 CRUD，含自动组卷与暂存。
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Paper'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Paper'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Paper'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paper'
+          description: ''
+      summary: 新增试卷
+  /api/exam/papers/{id}/:
+    get:
+      operationId: api_exam_papers_retrieve
+      description: 试卷 CRUD，含自动组卷与暂存。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷.
+        required: true
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paper'
+          description: ''
+      summary: 试卷详情
+    put:
+      operationId: api_exam_papers_update
+      description: 试卷 CRUD，含自动组卷与暂存。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷.
+        required: true
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Paper'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Paper'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Paper'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paper'
+          description: ''
+      summary: 更新试卷
+    patch:
+      operationId: api_exam_papers_partial_update
+      description: 试卷 CRUD，含自动组卷与暂存。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷.
+        required: true
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPaper'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPaper'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPaper'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paper'
+          description: ''
+      summary: 更新试卷
+    delete:
+      operationId: api_exam_papers_destroy
+      description: 试卷 CRUD，含自动组卷与暂存。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷.
+        required: true
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除试卷
+  /api/exam/papers/{id}/answers/:
+    get:
+      operationId: api_exam_papers_answers_retrieve
+      description: 下载试卷答案（纯文本 .txt）。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷.
+        required: true
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            text/plain:
+              schema:
+                type: string
+          description: ''
+      summary: 下载试卷答案（纯文本 .txt）
+  /api/exam/papers/{id}/draft/:
+    post:
+      operationId: api_exam_papers_draft_create
+      description: 暂存试卷：按传入顺序重建试题关联，并置为草稿。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷.
+        required: true
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DraftRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DraftRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperDetail'
+          description: ''
+      summary: 暂存试卷
+  /api/exam/papers/{id}/materials/:
+    get:
+      operationId: api_exam_papers_materials_retrieve
+      description: 下载试卷音频/图片材料（内存 zip 打包）。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷.
+        required: true
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+          description: ''
+      summary: 下载试卷音频/图片材料（内存 zip 打包）
+  /api/exam/papers/auto-generate/:
+    post:
+      operationId: api_exam_papers_auto_generate_create
+      description: 自动组卷：按学科/年级/章节/题型配置，从已通过题库随机抽题。
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutoGenerateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AutoGenerateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AutoGenerateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperDetail'
+          description: ''
+      summary: 自动组卷
+  /api/exam/publishes/:
+    get:
+      operationId: api_exam_publishes_list
+      description: 试卷发布（含 scope 参数化发布与撤回）。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaperPublishList'
+          description: ''
+      summary: 发布列表
+    post:
+      operationId: api_exam_publishes_create
+      description: 发布试卷：校验 scope 后创建发布记录，并把 Paper 置为 published。
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PublishCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PublishCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperPublish'
+          description: ''
+      summary: 新增发布
+  /api/exam/publishes/{id}/:
+    get:
+      operationId: api_exam_publishes_retrieve
+      description: 试卷发布（含 scope 参数化发布与撤回）。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷发布.
+        required: true
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperPublish'
+          description: ''
+      summary: 发布详情
+    put:
+      operationId: api_exam_publishes_update
+      description: 试卷发布（含 scope 参数化发布与撤回）。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷发布.
+        required: true
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaperPublish'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaperPublish'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaperPublish'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperPublish'
+          description: ''
+      summary: 更新发布
+    patch:
+      operationId: api_exam_publishes_partial_update
+      description: 试卷发布（含 scope 参数化发布与撤回）。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷发布.
+        required: true
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPaperPublish'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPaperPublish'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPaperPublish'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperPublish'
+          description: ''
+      summary: 更新发布
+    delete:
+      operationId: api_exam_publishes_destroy
+      description: 试卷发布（含 scope 参数化发布与撤回）。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷发布.
+        required: true
+      tags:
+      - 试卷
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除发布
+  /api/exam/publishes/{id}/recall/:
+    post:
+      operationId: api_exam_publishes_recall_create
+      description: 撤回发布：若无其它已发布记录，Paper 置回 draft。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试卷发布.
+        required: true
+      tags:
+      - 试卷
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaperPublish'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaperPublish'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaperPublish'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperPublish'
+          description: ''
+      summary: 撤回发布
+  /api/org/regions/:
+    get:
+      operationId: api_org_regions_list
+      description: 行政区划 CRUD。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 组织
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRegionList'
+          description: ''
+      summary: 地区列表
+    post:
+      operationId: api_org_regions_create
+      description: 行政区划 CRUD。
+      tags:
+      - 组织
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Region'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Region'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Region'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Region'
+          description: ''
+      summary: 新增地区
+  /api/org/regions/{id}/:
+    get:
+      operationId: api_org_regions_retrieve
+      description: 行政区划 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 行政区.
+        required: true
+      tags:
+      - 组织
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Region'
+          description: ''
+      summary: 地区详情
+    put:
+      operationId: api_org_regions_update
+      description: 行政区划 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 行政区.
+        required: true
+      tags:
+      - 组织
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Region'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Region'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Region'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Region'
+          description: ''
+      summary: 更新地区
+    patch:
+      operationId: api_org_regions_partial_update
+      description: 行政区划 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 行政区.
+        required: true
+      tags:
+      - 组织
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRegion'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRegion'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRegion'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Region'
+          description: ''
+      summary: 更新地区
+    delete:
+      operationId: api_org_regions_destroy
+      description: 行政区划 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 行政区.
+        required: true
+      tags:
+      - 组织
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除地区
+  /api/org/schools/:
+    get:
+      operationId: api_org_schools_list
+      description: 学校 CRUD。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 组织
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSchoolList'
+          description: ''
+      summary: 学校列表
+    post:
+      operationId: api_org_schools_create
+      description: 学校 CRUD。
+      tags:
+      - 组织
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/School'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/School'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/School'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/School'
+          description: ''
+      summary: 新增学校
+  /api/org/schools/{id}/:
+    get:
+      operationId: api_org_schools_retrieve
+      description: 学校 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 学校.
+        required: true
+      tags:
+      - 组织
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/School'
+          description: ''
+      summary: 学校详情
+    put:
+      operationId: api_org_schools_update
+      description: 学校 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 学校.
+        required: true
+      tags:
+      - 组织
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/School'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/School'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/School'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/School'
+          description: ''
+      summary: 更新学校
+    patch:
+      operationId: api_org_schools_partial_update
+      description: 学校 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 学校.
+        required: true
+      tags:
+      - 组织
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSchool'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSchool'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSchool'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/School'
+          description: ''
+      summary: 更新学校
+    delete:
+      operationId: api_org_schools_destroy
+      description: 学校 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 学校.
+        required: true
+      tags:
+      - 组织
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除学校
+  /api/questionbank/chapters/:
+    get:
+      operationId: api_questionbank_chapters_list
+      description: 章节 CRUD。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedChapterList'
+          description: ''
+      summary: 章节列表
+    post:
+      operationId: api_questionbank_chapters_create
+      description: 章节 CRUD。
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Chapter'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Chapter'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Chapter'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chapter'
+          description: ''
+      summary: 新增章节
+  /api/questionbank/chapters/{id}/:
+    get:
+      operationId: api_questionbank_chapters_retrieve
+      description: 章节 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 章节.
+        required: true
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chapter'
+          description: ''
+      summary: 章节详情
+    put:
+      operationId: api_questionbank_chapters_update
+      description: 章节 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 章节.
+        required: true
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Chapter'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Chapter'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Chapter'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chapter'
+          description: ''
+      summary: 更新章节
+    patch:
+      operationId: api_questionbank_chapters_partial_update
+      description: 章节 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 章节.
+        required: true
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChapter'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChapter'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChapter'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chapter'
+          description: ''
+      summary: 更新章节
+    delete:
+      operationId: api_questionbank_chapters_destroy
+      description: 章节 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 章节.
+        required: true
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除章节
+  /api/questionbank/courses/:
+    get:
+      operationId: api_questionbank_courses_list
+      description: 课程 CRUD。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCourseList'
+          description: ''
+      summary: 课程列表
+    post:
+      operationId: api_questionbank_courses_create
+      description: 课程 CRUD。
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Course'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Course'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Course'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+          description: ''
+      summary: 新增课程
+  /api/questionbank/courses/{id}/:
+    get:
+      operationId: api_questionbank_courses_retrieve
+      description: 课程 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 课程.
+        required: true
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+          description: ''
+      summary: 课程详情
+    put:
+      operationId: api_questionbank_courses_update
+      description: 课程 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 课程.
+        required: true
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Course'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Course'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Course'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+          description: ''
+      summary: 更新课程
+    patch:
+      operationId: api_questionbank_courses_partial_update
+      description: 课程 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 课程.
+        required: true
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCourse'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCourse'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCourse'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+          description: ''
+      summary: 更新课程
+    delete:
+      operationId: api_questionbank_courses_destroy
+      description: 课程 CRUD。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 课程.
+        required: true
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除课程
+  /api/questionbank/questions/:
+    get:
+      operationId: api_questionbank_questions_list
+      description: 试题 CRUD 及嵌套资源/审核接口。
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedQuestionList'
+          description: ''
+      summary: 试题列表
+    post:
+      operationId: api_questionbank_questions_create
+      description: 试题 CRUD 及嵌套资源/审核接口。
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Question'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Question'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Question'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+          description: ''
+      summary: 新增试题
+  /api/questionbank/questions/{id}/:
+    get:
+      operationId: api_questionbank_questions_retrieve
+      description: 试题 CRUD 及嵌套资源/审核接口。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试题.
+        required: true
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+          description: ''
+      summary: 试题详情
+    put:
+      operationId: api_questionbank_questions_update
+      description: 试题 CRUD 及嵌套资源/审核接口。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试题.
+        required: true
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Question'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Question'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Question'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+          description: ''
+      summary: 更新试题
+    patch:
+      operationId: api_questionbank_questions_partial_update
+      description: 试题 CRUD 及嵌套资源/审核接口。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试题.
+        required: true
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedQuestion'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedQuestion'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedQuestion'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Question'
+          description: ''
+      summary: 更新试题
+    delete:
+      operationId: api_questionbank_questions_destroy
+      description: 试题 CRUD 及嵌套资源/审核接口。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试题.
+        required: true
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+      summary: 删除试题
+  /api/questionbank/questions/{id}/resources/:
+    post:
+      operationId: api_questionbank_questions_resources_create
+      description: 上传试题资源（音频/图片/视频）。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试题.
+        required: true
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionResource'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/QuestionResource'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/QuestionResource'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionResource'
+          description: ''
+      summary: 上传试题资源（音频/图片/视频）
+  /api/questionbank/questions/{id}/resources/{rid}/:
+    delete:
+      operationId: api_questionbank_questions_resources_destroy
+      description: 删除指定试题资源。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: rid
+        schema:
+          type: integer
+        required: true
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+      summary: 删除指定试题资源
+  /api/questionbank/questions/{id}/review/:
+    post:
+      operationId: api_questionbank_questions_review_create
+      description: 审核试题（通过/驳回）。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试题.
+        required: true
+      tags:
+      - 题库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionReview'
+          description: ''
+      summary: 审核试题（通过/驳回）
+  /api/questionbank/questions/{id}/reviews/:
+    get:
+      operationId: api_questionbank_questions_reviews_list
+      description: 查询试题审核记录。
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 试题.
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - 题库
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedQuestionReviewList'
+          description: ''
+      summary: 查询试题审核记录
+  /api/users/change-password/:
+    post:
+      operationId: api_users_change_password_create
+      description: 修改密码。
+      tags:
+      - 用户
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+      summary: 修改密码
+  /api/users/me/:
+    get:
+      operationId: api_users_me_retrieve
+      description: 当前登录用户信息。
+      tags:
+      - 用户
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+      summary: 当前登录用户信息
+  /api/users/register/:
+    post:
+      operationId: api_users_register_create
+      description: 注册。
+      tags:
+      - 用户
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Register'
+          description: ''
+      summary: 注册
+components:
+  schemas:
+    Answer:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        answer:
+          type: string
+          title: 作答内容
+        is_correct:
+          type: boolean
+          nullable: true
+          title: 是否正确
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: 得分
+        sheet:
+          type: integer
+          title: 答卷
+        question:
+          type: integer
+          title: 试题
+      required:
+      - created_at
+      - id
+      - question
+      - sheet
+      - updated_at
+    AnswerSheet:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 开始作答时间
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 提交时间
+        is_submitted:
+          type: boolean
+          title: 是否已提交
+        total_score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: 得分
+        paper:
+          type: integer
+          title: 试卷
+        student:
+          type: integer
+          title: 学生
+        publish:
+          type: integer
+          nullable: true
+          title: 发布记录
+      required:
+      - created_at
+      - id
+      - paper
+      - publish
+      - student
+      - updated_at
+    AutoGenerateRequest:
+      type: object
+      description: 自动组卷请求体。
+      properties:
+        subject:
+          enum:
+          - music
+          - art
+          type: string
+          description: |-
+            * `music` - 音乐
+            * `art` - 美术
+          x-spec-enum-id: 6382a4a5144b7d4a
+        grade:
+          type: string
+          maxLength: 32
+        chapter_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        qtype_config:
+          type: array
+          items:
+            $ref: '#/components/schemas/QtypeConfig'
+        total_score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+        title:
+          type: string
+          maxLength: 128
+        ptype:
+          enum:
+          - practice
+          - formal
+          type: string
+          description: |-
+            * `practice` - 练习
+            * `formal` - 正式测评
+          x-spec-enum-id: 502b8a3cf890754d
+        level:
+          enum:
+          - class
+          - school
+          - district
+          - city
+          - province
+          type: string
+          description: |-
+            * `class` - 班级
+            * `school` - 学校
+            * `district` - 区县
+            * `city` - 市州
+            * `province` - 省级
+          x-spec-enum-id: 6d1523e90fd9d681
+      required:
+      - qtype_config
+      - subject
+      - title
+    Certificate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        subject:
+          enum:
+          - music
+          - art
+          type: string
+          description: |-
+            * `music` - 音乐
+            * `art` - 美术
+          x-spec-enum-id: 6382a4a5144b7d4a
+          title: 学科
+        title:
+          type: string
+          title: 证书名称
+          maxLength: 128
+        file:
+          type: string
+          format: uri
+          title: 证书文件
+        student:
+          type: integer
+          title: 学生
+        sheet:
+          type: integer
+          nullable: true
+          title: 关联答卷
+      required:
+      - created_at
+      - id
+      - student
+      - subject
+      - title
+      - updated_at
+    ChangePassword:
+      type: object
+      properties:
+        old_password:
+          type: string
+        new_password:
+          type: string
+      required:
+      - new_password
+      - old_password
+    Chapter:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        name:
+          type: string
+          title: 章节名称
+          maxLength: 128
+        sort:
+          type: integer
+          title: 排序
+        course:
+          type: integer
+          title: 所属课程
+        parent:
+          type: integer
+          nullable: true
+          title: 上级章节
+      required:
+      - course
+      - created_at
+      - id
+      - name
+      - updated_at
+    ClassRoom:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        school_name:
+          type: string
+          readOnly: true
+        head_teacher_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        name:
+          type: string
+          title: 班级名称
+          maxLength: 128
+        code:
+          type: string
+          title: 班级编号
+          maxLength: 64
+        grade:
+          type: string
+          title: 年级
+          maxLength: 32
+        school:
+          type: integer
+          title: 所属学校
+        head_teacher:
+          type: integer
+          nullable: true
+          title: 班主任
+      required:
+      - code
+      - created_at
+      - head_teacher_name
+      - id
+      - name
+      - school
+      - school_name
+      - updated_at
+    ClassStudent:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        status:
+          enum:
+          - pending
+          - approved
+          - rejected
+          type: string
+          description: |-
+            * `pending` - 待审核
+            * `approved` - 已通过
+            * `rejected` - 已拒绝
+          x-spec-enum-id: 97cf48c8f884947c
+          title: 状态
+        klass:
+          type: integer
+          title: 班级
+        student:
+          type: integer
+          title: 学生
+      required:
+      - created_at
+      - id
+      - klass
+      - student
+      - updated_at
+    ClassTeacher:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        status:
+          enum:
+          - pending
+          - approved
+          - rejected
+          type: string
+          description: |-
+            * `pending` - 待审核
+            * `approved` - 已通过
+            * `rejected` - 已拒绝
+          x-spec-enum-id: 97cf48c8f884947c
+          title: 状态
+        klass:
+          type: integer
+          title: 班级
+        teacher:
+          type: integer
+          title: 教师
+        course:
+          type: integer
+          nullable: true
+          title: 任教学科
+      required:
+      - course
+      - created_at
+      - id
+      - klass
+      - teacher
+      - updated_at
+    Course:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        name:
+          type: string
+          title: 课程名称
+          maxLength: 64
+        code:
+          type: string
+          title: 课程代码
+          maxLength: 32
+        description:
+          type: string
+          title: 描述
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    DraftRequest:
+      type: object
+      description: 暂存试卷请求体：按顺序重建试题关联。
+      properties:
+        question_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+      required:
+      - question_ids
+    PaginatedAnswerList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Answer'
+    PaginatedAnswerSheetList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnswerSheet'
+    PaginatedCertificateList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Certificate'
+    PaginatedChapterList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Chapter'
+    PaginatedClassRoomList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClassRoom'
+    PaginatedClassStudentList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClassStudent'
+    PaginatedClassTeacherList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClassTeacher'
+    PaginatedCourseList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Course'
+    PaginatedPaperList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Paper'
+    PaginatedPaperPublishList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaperPublish'
+    PaginatedPaperQuestionList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaperQuestion'
+    PaginatedQuestionList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Question'
+    PaginatedQuestionReviewList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionReview'
+    PaginatedRegionList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Region'
+    PaginatedSchoolList:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/School'
+    Paper:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        question_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        title:
+          type: string
+          title: 试卷标题
+          maxLength: 128
+        ptype:
+          enum:
+          - practice
+          - formal
+          type: string
+          description: |-
+            * `practice` - 练习
+            * `formal` - 正式测评
+          x-spec-enum-id: 502b8a3cf890754d
+          title: 类型
+        subject:
+          enum:
+          - music
+          - art
+          type: string
+          description: |-
+            * `music` - 音乐
+            * `art` - 美术
+          x-spec-enum-id: 6382a4a5144b7d4a
+          title: 学科
+        level:
+          enum:
+          - class
+          - school
+          - district
+          - city
+          - province
+          type: string
+          description: |-
+            * `class` - 班级
+            * `school` - 学校
+            * `district` - 区县
+            * `city` - 市州
+            * `province` - 省级
+          x-spec-enum-id: 6d1523e90fd9d681
+          title: 适用范围
+        grade:
+          type: string
+          title: 年级
+          maxLength: 32
+        duration:
+          type: integer
+          title: 限时(分钟)
+        total_score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: 总分
+        status:
+          enum:
+          - draft
+          - published
+          - closed
+          type: string
+          description: |-
+            * `draft` - 草稿
+            * `published` - 已发布
+            * `closed` - 已结束
+          x-spec-enum-id: a69070e49219ba85
+          title: 状态
+        creator:
+          type: integer
+          nullable: true
+          title: 创建人
+      required:
+      - created_at
+      - id
+      - question_count
+      - subject
+      - title
+      - updated_at
+    PaperDetail:
+      type: object
+      description: 试卷详情（含完整题目）。
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        paper_questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaperQuestionDetail'
+          readOnly: true
+        question_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        title:
+          type: string
+          title: 试卷标题
+          maxLength: 128
+        ptype:
+          enum:
+          - practice
+          - formal
+          type: string
+          description: |-
+            * `practice` - 练习
+            * `formal` - 正式测评
+          x-spec-enum-id: 502b8a3cf890754d
+          title: 类型
+        subject:
+          enum:
+          - music
+          - art
+          type: string
+          description: |-
+            * `music` - 音乐
+            * `art` - 美术
+          x-spec-enum-id: 6382a4a5144b7d4a
+          title: 学科
+        level:
+          enum:
+          - class
+          - school
+          - district
+          - city
+          - province
+          type: string
+          description: |-
+            * `class` - 班级
+            * `school` - 学校
+            * `district` - 区县
+            * `city` - 市州
+            * `province` - 省级
+          x-spec-enum-id: 6d1523e90fd9d681
+          title: 适用范围
+        grade:
+          type: string
+          title: 年级
+          maxLength: 32
+        duration:
+          type: integer
+          title: 限时(分钟)
+        total_score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: 总分
+        status:
+          enum:
+          - draft
+          - published
+          - closed
+          type: string
+          description: |-
+            * `draft` - 草稿
+            * `published` - 已发布
+            * `closed` - 已结束
+          x-spec-enum-id: a69070e49219ba85
+          title: 状态
+        creator:
+          type: integer
+          nullable: true
+          title: 创建人
+      required:
+      - created_at
+      - id
+      - paper_questions
+      - question_count
+      - subject
+      - title
+      - updated_at
+    PaperPublish:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        scope_type:
+          enum:
+          - class
+          - school
+          - grade
+          - region
+          type: string
+          description: |-
+            * `class` - 班级
+            * `school` - 学校
+            * `grade` - 年级
+            * `region` - 行政区
+          x-spec-enum-id: 15d1fcef3eb9c02e
+          title: 发布范围类型
+        grade:
+          type: string
+          title: 年级
+          maxLength: 32
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 开始时间
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 结束时间
+        status:
+          enum:
+          - published
+          - recalled
+          type: string
+          description: |-
+            * `published` - 已发布
+            * `recalled` - 已撤回
+          x-spec-enum-id: 8e935f28bb371549
+          title: 状态
+        paper:
+          type: integer
+          title: 试卷
+        target_school:
+          type: integer
+          nullable: true
+          title: 目标学校
+        target_class:
+          type: integer
+          nullable: true
+          title: 目标班级
+        target_region:
+          type: integer
+          nullable: true
+          title: 目标行政区
+      required:
+      - created_at
+      - id
+      - paper
+      - scope_type
+      - updated_at
+    PaperQuestion:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        sort:
+          type: integer
+          title: 题号
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: 分值
+        paper:
+          type: integer
+          title: 试卷
+        question:
+          type: integer
+          title: 试题
+      required:
+      - created_at
+      - id
+      - paper
+      - question
+      - updated_at
+    PaperQuestionDetail:
+      type: object
+      description: 试卷试题（含完整题目内容）。
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        question:
+          allOf:
+          - $ref: '#/components/schemas/Question'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        sort:
+          type: integer
+          title: 题号
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: 分值
+        paper:
+          type: integer
+          title: 试卷
+      required:
+      - created_at
+      - id
+      - paper
+      - question
+      - updated_at
+    PatchedAnswer:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        answer:
+          type: string
+          title: 作答内容
+        is_correct:
+          type: boolean
+          nullable: true
+          title: 是否正确
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: 得分
+        sheet:
+          type: integer
+          title: 答卷
+        question:
+          type: integer
+          title: 试题
+    PatchedAnswerSheet:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 开始作答时间
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 提交时间
+        is_submitted:
+          type: boolean
+          title: 是否已提交
+        total_score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: 得分
+        paper:
+          type: integer
+          title: 试卷
+        student:
+          type: integer
+          title: 学生
+        publish:
+          type: integer
+          nullable: true
+          title: 发布记录
+    PatchedCertificate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        subject:
+          enum:
+          - music
+          - art
+          type: string
+          description: |-
+            * `music` - 音乐
+            * `art` - 美术
+          x-spec-enum-id: 6382a4a5144b7d4a
+          title: 学科
+        title:
+          type: string
+          title: 证书名称
+          maxLength: 128
+        file:
+          type: string
+          format: uri
+          title: 证书文件
+        student:
+          type: integer
+          title: 学生
+        sheet:
+          type: integer
+          nullable: true
+          title: 关联答卷
+    PatchedChapter:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        name:
+          type: string
+          title: 章节名称
+          maxLength: 128
+        sort:
+          type: integer
+          title: 排序
+        course:
+          type: integer
+          title: 所属课程
+        parent:
+          type: integer
+          nullable: true
+          title: 上级章节
+    PatchedClassRoom:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        school_name:
+          type: string
+          readOnly: true
+        head_teacher_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        name:
+          type: string
+          title: 班级名称
+          maxLength: 128
+        code:
+          type: string
+          title: 班级编号
+          maxLength: 64
+        grade:
+          type: string
+          title: 年级
+          maxLength: 32
+        school:
+          type: integer
+          title: 所属学校
+        head_teacher:
+          type: integer
+          nullable: true
+          title: 班主任
+    PatchedClassStudent:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        status:
+          enum:
+          - pending
+          - approved
+          - rejected
+          type: string
+          description: |-
+            * `pending` - 待审核
+            * `approved` - 已通过
+            * `rejected` - 已拒绝
+          x-spec-enum-id: 97cf48c8f884947c
+          title: 状态
+        klass:
+          type: integer
+          title: 班级
+        student:
+          type: integer
+          title: 学生
+    PatchedClassTeacher:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        status:
+          enum:
+          - pending
+          - approved
+          - rejected
+          type: string
+          description: |-
+            * `pending` - 待审核
+            * `approved` - 已通过
+            * `rejected` - 已拒绝
+          x-spec-enum-id: 97cf48c8f884947c
+          title: 状态
+        klass:
+          type: integer
+          title: 班级
+        teacher:
+          type: integer
+          title: 教师
+        course:
+          type: integer
+          nullable: true
+          title: 任教学科
+    PatchedCourse:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        name:
+          type: string
+          title: 课程名称
+          maxLength: 64
+        code:
+          type: string
+          title: 课程代码
+          maxLength: 32
+        description:
+          type: string
+          title: 描述
+    PatchedPaper:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        question_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        title:
+          type: string
+          title: 试卷标题
+          maxLength: 128
+        ptype:
+          enum:
+          - practice
+          - formal
+          type: string
+          description: |-
+            * `practice` - 练习
+            * `formal` - 正式测评
+          x-spec-enum-id: 502b8a3cf890754d
+          title: 类型
+        subject:
+          enum:
+          - music
+          - art
+          type: string
+          description: |-
+            * `music` - 音乐
+            * `art` - 美术
+          x-spec-enum-id: 6382a4a5144b7d4a
+          title: 学科
+        level:
+          enum:
+          - class
+          - school
+          - district
+          - city
+          - province
+          type: string
+          description: |-
+            * `class` - 班级
+            * `school` - 学校
+            * `district` - 区县
+            * `city` - 市州
+            * `province` - 省级
+          x-spec-enum-id: 6d1523e90fd9d681
+          title: 适用范围
+        grade:
+          type: string
+          title: 年级
+          maxLength: 32
+        duration:
+          type: integer
+          title: 限时(分钟)
+        total_score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          title: 总分
+        status:
+          enum:
+          - draft
+          - published
+          - closed
+          type: string
+          description: |-
+            * `draft` - 草稿
+            * `published` - 已发布
+            * `closed` - 已结束
+          x-spec-enum-id: a69070e49219ba85
+          title: 状态
+        creator:
+          type: integer
+          nullable: true
+          title: 创建人
+    PatchedPaperPublish:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        scope_type:
+          enum:
+          - class
+          - school
+          - grade
+          - region
+          type: string
+          description: |-
+            * `class` - 班级
+            * `school` - 学校
+            * `grade` - 年级
+            * `region` - 行政区
+          x-spec-enum-id: 15d1fcef3eb9c02e
+          title: 发布范围类型
+        grade:
+          type: string
+          title: 年级
+          maxLength: 32
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 开始时间
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 结束时间
+        status:
+          enum:
+          - published
+          - recalled
+          type: string
+          description: |-
+            * `published` - 已发布
+            * `recalled` - 已撤回
+          x-spec-enum-id: 8e935f28bb371549
+          title: 状态
+        paper:
+          type: integer
+          title: 试卷
+        target_school:
+          type: integer
+          nullable: true
+          title: 目标学校
+        target_class:
+          type: integer
+          nullable: true
+          title: 目标班级
+        target_region:
+          type: integer
+          nullable: true
+          title: 目标行政区
+    PatchedPaperQuestion:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        sort:
+          type: integer
+          title: 题号
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: 分值
+        paper:
+          type: integer
+          title: 试卷
+        question:
+          type: integer
+          title: 试题
+    PatchedQuestion:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionResource'
+          readOnly: true
+        course_name:
+          type: string
+          readOnly: true
+        chapter_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        qtype:
+          enum:
+          - single
+          - multiple
+          - judge
+          - fill
+          - short
+          - listening
+          - sight
+          type: string
+          description: |-
+            * `single` - 单选题
+            * `multiple` - 多选题
+            * `judge` - 判断题
+            * `fill` - 填空题
+            * `short` - 简答题
+            * `listening` - 听力题
+            * `sight` - 视唱/识谱题
+          x-spec-enum-id: c063f0746bed7209
+          title: 题型
+        difficulty:
+          enum:
+          - easy
+          - medium
+          - hard
+          type: string
+          description: |-
+            * `easy` - 简单
+            * `medium` - 中等
+            * `hard` - 困难
+          x-spec-enum-id: d3d5d2707845fb59
+          title: 难度
+        grade:
+          type: string
+          title: 适用年级
+          maxLength: 32
+        stem:
+          type: string
+          title: 题干
+        options:
+          title: 选项
+        answer:
+          type: string
+          title: 参考答案
+        analysis:
+          type: string
+          title: 解析
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: 分值
+        status:
+          enum:
+          - draft
+          - pending
+          - approved
+          - rejected
+          type: string
+          description: |-
+            * `draft` - 草稿
+            * `pending` - 待审核
+            * `approved` - 已通过
+            * `rejected` - 已驳回
+          x-spec-enum-id: 1d0b5ee92aa5fc45
+          title: 状态
+        course:
+          type: integer
+          title: 学科
+        chapter:
+          type: integer
+          nullable: true
+          title: 章节
+        creator:
+          type: integer
+          nullable: true
+          title: 创建人
+        reviewer:
+          type: integer
+          nullable: true
+          title: 审核人
+    PatchedRegion:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        name:
+          type: string
+          title: 名称
+          maxLength: 64
+        code:
+          type: string
+          title: 行政区代码
+          maxLength: 32
+        level:
+          enum:
+          - province
+          - city
+          - district
+          type: string
+          description: |-
+            * `province` - 省
+            * `city` - 市州
+            * `district` - 区县
+          x-spec-enum-id: 9ef5d589d89a1e66
+          title: 层级
+        parent:
+          type: integer
+          nullable: true
+          title: 上级
+    PatchedSchool:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        region_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        name:
+          type: string
+          title: 学校名称
+          maxLength: 128
+        code:
+          type: string
+          title: 学校代码
+          maxLength: 64
+        address:
+          type: string
+          title: 地址
+          maxLength: 255
+        contact:
+          type: string
+          title: 联系人
+          maxLength: 64
+        phone:
+          type: string
+          title: 联系电话
+          maxLength: 32
+        region:
+          type: integer
+          nullable: true
+          title: 所属区县
+    PublishCreate:
+      type: object
+      description: 发布试卷请求体：含 scope 交叉校验。
+      properties:
+        paper:
+          type: integer
+        scope_type:
+          enum:
+          - class
+          - school
+          - grade
+          - region
+          type: string
+          description: |-
+            * `class` - 班级
+            * `school` - 学校
+            * `grade` - 年级
+            * `region` - 行政区
+          x-spec-enum-id: 15d1fcef3eb9c02e
+        target_school:
+          type: integer
+          nullable: true
+        target_class:
+          type: integer
+          nullable: true
+        target_region:
+          type: integer
+          nullable: true
+        grade:
+          type: string
+          maxLength: 32
+        start_at:
+          type: string
+          format: date-time
+          nullable: true
+        end_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - paper
+      - scope_type
+    QtypeConfig:
+      type: object
+      description: 自动组卷：单种题型的抽题配置。
+      properties:
+        qtype:
+          enum:
+          - single
+          - multiple
+          - judge
+          - fill
+          - short
+          - listening
+          - sight
+          type: string
+          description: |-
+            * `single` - 单选题
+            * `multiple` - 多选题
+            * `judge` - 判断题
+            * `fill` - 填空题
+            * `short` - 简答题
+            * `listening` - 听力题
+            * `sight` - 视唱/识谱题
+          x-spec-enum-id: c063f0746bed7209
+        count:
+          type: integer
+          minimum: 1
+        difficulty:
+          enum:
+          - easy
+          - medium
+          - hard
+          type: string
+          description: |-
+            * `easy` - 简单
+            * `medium` - 中等
+            * `hard` - 困难
+          x-spec-enum-id: d3d5d2707845fb59
+      required:
+      - count
+      - difficulty
+      - qtype
+    Question:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuestionResource'
+          readOnly: true
+        course_name:
+          type: string
+          readOnly: true
+        chapter_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        qtype:
+          enum:
+          - single
+          - multiple
+          - judge
+          - fill
+          - short
+          - listening
+          - sight
+          type: string
+          description: |-
+            * `single` - 单选题
+            * `multiple` - 多选题
+            * `judge` - 判断题
+            * `fill` - 填空题
+            * `short` - 简答题
+            * `listening` - 听力题
+            * `sight` - 视唱/识谱题
+          x-spec-enum-id: c063f0746bed7209
+          title: 题型
+        difficulty:
+          enum:
+          - easy
+          - medium
+          - hard
+          type: string
+          description: |-
+            * `easy` - 简单
+            * `medium` - 中等
+            * `hard` - 困难
+          x-spec-enum-id: d3d5d2707845fb59
+          title: 难度
+        grade:
+          type: string
+          title: 适用年级
+          maxLength: 32
+        stem:
+          type: string
+          title: 题干
+        options:
+          title: 选项
+        answer:
+          type: string
+          title: 参考答案
+        analysis:
+          type: string
+          title: 解析
+        score:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          title: 分值
+        status:
+          enum:
+          - draft
+          - pending
+          - approved
+          - rejected
+          type: string
+          description: |-
+            * `draft` - 草稿
+            * `pending` - 待审核
+            * `approved` - 已通过
+            * `rejected` - 已驳回
+          x-spec-enum-id: 1d0b5ee92aa5fc45
+          title: 状态
+        course:
+          type: integer
+          title: 学科
+        chapter:
+          type: integer
+          nullable: true
+          title: 章节
+        creator:
+          type: integer
+          nullable: true
+          title: 创建人
+        reviewer:
+          type: integer
+          nullable: true
+          title: 审核人
+      required:
+      - chapter_name
+      - course
+      - course_name
+      - created_at
+      - id
+      - qtype
+      - resources
+      - stem
+      - updated_at
+    QuestionResource:
+      type: object
+      description: 试题资源：file 必填、rtype 由模型 choices 校验；question 由嵌套路由注入，设为只读。
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        rtype:
+          enum:
+          - audio
+          - image
+          - video
+          type: string
+          description: |-
+            * `audio` - 音频
+            * `image` - 图片
+            * `video` - 视频
+          x-spec-enum-id: 34ef4af7449c5093
+          title: 资源类型
+        file:
+          type: string
+          format: uri
+          title: 文件
+        question:
+          type: integer
+          readOnly: true
+          title: 所属试题
+      required:
+      - created_at
+      - file
+      - id
+      - question
+      - rtype
+      - updated_at
+    QuestionReview:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        result:
+          enum:
+          - approved
+          - rejected
+          type: string
+          description: |-
+            * `approved` - 通过
+            * `rejected` - 驳回
+          x-spec-enum-id: 6d26cee3053a440c
+          title: 审核结果
+        comment:
+          type: string
+          title: 审核意见
+        question:
+          type: integer
+          title: 试题
+        reviewer:
+          type: integer
+          nullable: true
+          title: 审核人
+      required:
+      - created_at
+      - id
+      - question
+      - result
+      - updated_at
+    Region:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        name:
+          type: string
+          title: 名称
+          maxLength: 64
+        code:
+          type: string
+          title: 行政区代码
+          maxLength: 32
+        level:
+          enum:
+          - province
+          - city
+          - district
+          type: string
+          description: |-
+            * `province` - 省
+            * `city` - 市州
+            * `district` - 区县
+          x-spec-enum-id: 9ef5d589d89a1e66
+          title: 层级
+        parent:
+          type: integer
+          nullable: true
+          title: 上级
+      required:
+      - code
+      - created_at
+      - id
+      - level
+      - name
+      - updated_at
+    Register:
+      type: object
+      properties:
+        username:
+          type: string
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+        role:
+          enum:
+          - student
+          - teacher
+          - school
+          - district
+          - city
+          - province
+          - qb_admin
+          type: string
+          description: |-
+            * `student` - 学生
+            * `teacher` - 教师
+            * `school` - 学校管理员
+            * `district` - 区县管理员
+            * `city` - 市州管理员
+            * `province` - 省级管理员
+            * `qb_admin` - 题库管理员
+          x-spec-enum-id: 9e7102dbbae089f0
+          title: 角色
+        real_name:
+          type: string
+          title: 真实姓名
+          maxLength: 32
+        phone:
+          type: string
+          title: 手机号
+          maxLength: 20
+        student_no:
+          type: string
+          title: 学籍号
+          maxLength: 64
+        school:
+          type: integer
+          nullable: true
+          title: 所属学校
+        region:
+          type: integer
+          nullable: true
+          title: 所属行政区
+      required:
+      - password
+      - username
+    ReviewRequest:
+      type: object
+      description: 审核请求体，仅接收 result 与 comment。
+      properties:
+        result:
+          enum:
+          - approved
+          - rejected
+          type: string
+          description: |-
+            * `approved` - 通过
+            * `rejected` - 驳回
+          x-spec-enum-id: 6d26cee3053a440c
+        comment:
+          type: string
+          default: ''
+      required:
+      - result
+    School:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        region_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        is_deleted:
+          type: boolean
+          title: 是否删除
+        name:
+          type: string
+          title: 学校名称
+          maxLength: 128
+        code:
+          type: string
+          title: 学校代码
+          maxLength: 64
+        address:
+          type: string
+          title: 地址
+          maxLength: 255
+        contact:
+          type: string
+          title: 联系人
+          maxLength: 64
+        phone:
+          type: string
+          title: 联系电话
+          maxLength: 32
+        region:
+          type: integer
+          nullable: true
+          title: 所属区县
+      required:
+      - code
+      - created_at
+      - id
+      - name
+      - region_name
+      - updated_at
+    TokenObtainPair:
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+        password:
+          type: string
+          writeOnly: true
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - password
+      - refresh
+      - username
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        real_name:
+          type: string
+          title: 真实姓名
+          maxLength: 32
+        phone:
+          type: string
+          title: 手机号
+          maxLength: 20
+        avatar:
+          type: string
+          format: uri
+          title: 头像
+        role:
+          enum:
+          - student
+          - teacher
+          - school
+          - district
+          - city
+          - province
+          - qb_admin
+          type: string
+          description: |-
+            * `student` - 学生
+            * `teacher` - 教师
+            * `school` - 学校管理员
+            * `district` - 区县管理员
+            * `city` - 市州管理员
+            * `province` - 省级管理员
+            * `qb_admin` - 题库管理员
+          x-spec-enum-id: 9e7102dbbae089f0
+          title: 角色
+        role_display:
+          type: string
+          readOnly: true
+        student_no:
+          type: string
+          title: 学籍号
+          maxLength: 64
+        school:
+          type: integer
+          nullable: true
+          title: 所属学校
+        region:
+          type: integer
+          nullable: true
+          title: 所属行政区
+        email:
+          type: string
+          format: email
+          title: 电子邮件地址
+          maxLength: 254
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 加入日期
+      required:
+      - date_joined
+      - id
+      - role_display
+      - username
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
