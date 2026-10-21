@@ -143,3 +143,10 @@ CORS_ALLOW_ALL_ORIGINS = True
 # ---------------- 业务 ----------------
 # 操作日志中间件开关（可在 .env 中覆盖）
 OPERATION_LOG_ENABLED = os.environ.get("OPERATION_LOG_ENABLED", "1") == "1"
+
+# ---------------- Claude / Anthropic ----------------
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "").strip() or None
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest").strip()
+ANTHROPIC_MAX_TOKENS = int(os.environ.get("ANTHROPIC_MAX_TOKENS", "1024"))
+ANTHROPIC_TIMEOUT = float(os.environ.get("ANTHROPIC_TIMEOUT", "30"))

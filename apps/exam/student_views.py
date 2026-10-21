@@ -1,0 +1,194 @@
+"""学生端结果接口（C 域 #14-#17）。
+
+14. GET  /api/exam/my-scores/          查看我的成绩
+15. GET  /api/exam/my-scores/curve/    成绩曲线
+16. GET  /api/exam/my-growth/          个人成长曲线（音乐 / 美术）
+17. POST /api/exam/extracurricular/    上传课外自主学习图片
+"""
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.views import APIView
+
+from apps.common.exceptions import ApiException
+from apps.common.permissions import has_role
+from apps.common.response import ApiResponse, ErrorCode
+from apps.exam import services
+from apps.exam.models import AnswerSheet, ExtracurricularUpload, PerformanceScore
+from apps.exam.serializers import ExtracurricularUploadSerializer
+from apps.users.models import User
+
+SUBJECT_LABELS = {"music": "音乐", "art": "美术"}
+
+
+def _course_subject(course):
+    """把课程映射为 music / art。"""
+    if course is None:
+        return ""
+    code = (course.code or "").strip().lower()
+    if code in SUBJECT_LABELS:
+        return code
+    name = course.name or ""
+    if "音乐" in name:
+        return "music"
+    if "美术" in name:
+        return "art"
+    return ""
+
+
+def _exam_points(student):
+    """测评成绩点（已提交答卷）。"""
+    sheets = (
+        AnswerSheet.objects.filter(student=student, is_submitted=True, is_deleted=False)
+        .select_related("paper")
+        .order_by("submitted_at")
+    )
+    points = []
+    for sheet in sheets:
+        total = float(sheet.paper.total_score or 0)
+        score = float(sheet.total_score)
+        points.append({
+            "source": "exam",
+            "title": sheet.paper.title,
+            "subject": sheet.paper.subject,
+            "subject_display": sheet.paper.get_subject_display(),
+            "ptype": sheet.paper.ptype,
+            "score": score,
+            "total_score": total,
+            "rate": round(score / total, 4) if total > 0 else 0,
+            "date": sheet.submitted_at,
+        })
+    return points
+
+
+def _performance_points(student):
+    """平时表现评分点。"""
+    records = (
+        PerformanceScore.objects.filter(student=student, is_deleted=False)
+        .select_related("course")
+        .order_by("created_at")
+    )
+    points = []
+    for item in records:
+        subject = _course_subject(item.course)
+        points.append({
+            "source": "daily",
+            "title": f"{item.course.name if item.course else '平时表现'}评分",
+            "subject": subject,
+            "subject_display": SUBJECT_LABELS.get(subject, ""),
+            "ptype": "daily",
+            "score": float(item.score),
+            "total_score": 100,
+            "rate": round(float(item.score) / 100, 4),
+            "date": item.created_at,
+        })
+    return points
+
+
+def _all_points(student):
+    points = _exam_points(student) + _performance_points(student)
+    points.sort(key=lambda p: p["date"] or 0)
+    return points
+
+
+def _point_payload(point):
+    data = dict(point)
+    if data.get("date") is not None:
+        data["date"] = data["date"].strftime("%Y-%m-%d %H:%M:%S")
+    return data
+
+
+class MyScoresViewSet(viewsets.GenericViewSet):
+    """学生端：我的成绩与成绩曲线。"""
+
+    permission_classes = [has_role(User.ROLE_STUDENT)]
+
+    def list(self, request):
+        """我的成绩：测评成绩 + 平时表现评分 + 学科均分。"""
+        exam_points = _exam_points(request.user)
+        daily_points = _performance_points(request.user)
+        subject_bucket = {}
+        for point in exam_points + daily_points:
+            key = point["subject"] or "other"
+            subject_bucket.setdefault(key, []).append(point["rate"])
+
+        by_subject = [
+            {
+                "subject": key,
+                "subject_display": SUBJECT_LABELS.get(key, "其他"),
+                "count": len(rates),
+                "average_rate": round(sum(rates) / len(rates), 4),
+            }
+            for key, rates in subject_bucket.items()
+        ]
+        return ApiResponse(data={
+            "exams": [_point_payload(p) for p in exam_points],
+            "performances": [_point_payload(p) for p in daily_points],
+            "by_subject": by_subject,
+        })
+
+    @action(detail=False, methods=["get"])
+    def curve(self, request):
+        """成绩曲线：按时间排序的全部成绩点（可得率 0-1）。"""
+        points = _all_points(request.user)
+        subject = request.query_params.get("subject")
+        if subject:
+            points = [p for p in points if p["subject"] == subject]
+        return ApiResponse(data={
+            "points": [_point_payload(p) for p in points],
+            "total": len(points),
+        })
+
+
+class MyGrowthView(APIView):
+    """GET /api/exam/my-growth/ 个人成长曲线（音乐 / 美术）。"""
+
+    permission_classes = [has_role(User.ROLE_STUDENT)]
+
+    def get(self, request):
+        points = _all_points(request.user)
+        series = {}
+        for point in points:
+            key = point["subject"] or "other"
+            series.setdefault(key, []).append(_point_payload(point))
+
+        data = [
+            {
+                "subject": key,
+                "subject_display": SUBJECT_LABELS.get(key, "其他"),
+                "count": len(items),
+                "average_rate": round(sum(i["rate"] for i in items) / len(items), 4),
+                "points": items,
+            }
+            for key, items in series.items()
+        ]
+        return ApiResponse(data={"series": data, "total": len(points)})
+
+
+class ExtracurricularViewSet(viewsets.GenericViewSet):
+    """学生课外自主学习上传。"""
+
+    permission_classes = [has_role(User.ROLE_STUDENT)]
+    serializer_class = ExtracurricularUploadSerializer
+
+    def create(self, request):
+        """POST /api/exam/extracurricular/ 上传课外学习图片（multipart）。"""
+        image = request.FILES.get("image")
+        if image is None:
+            raise ApiException("请上传图片（字段名 image）", ErrorCode.INVALID_PARAM, 400)
+        title = request.data.get("title") or "课外学习成果"
+        record = ExtracurricularUpload.objects.create(
+            student=request.user,
+            title=title[:128],
+            image=image,
+            description=request.data.get("description", ""),
+        )
+        return ApiResponse(
+            data={
+                "id": record.id,
+                "title": record.title,
+                "image": request.build_absolute_uri(record.image.url) if record.image else "",
+                "description": record.description,
+                "created_at": record.created_at,
+            },
+            message="上传成功",
+        )

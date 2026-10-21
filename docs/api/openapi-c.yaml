@@ -1,0 +1,1062 @@
+openapi: 3.0.3
+info:
+  title: 艺术素质测评系统 · C 域接口
+  version: 1.0.0
+  description: |
+    C 组负责的「作答 · 判分 · 评分 · 统计 · 证书」共 26 个接口，另附登录/刷新令牌。
+
+    ## 使用说明
+    1. 先调用 `POST /api/auth/login/` 获取 `data.access`，在 Apifox 中提取为环境变量 `access`；
+    2. 其余请求 Header 携带 `Authorization: Bearer {{access}}`；
+    3. 所有接口统一返回信封 `{"code": 0, "message": "ok", "data": ...}`，`code != 0` 即失败；
+    4. 列表接口分页参数为 `page` / `page_size`，返回 `{list, total, page, page_size}`；
+    5. 角色：student 学生、teacher 教师、school 学校管理员、district 区县、city 市州、province 省级；superuser 可访问全部。
+
+    ## 调试前置数据
+    数据库默认为空，需先有：课程 → 试题 → 试卷(paper) → 发布(publish) → 学生/班级，否则列表类接口返回空。
+servers:
+  - url: http://127.0.0.1:8000
+    description: 本地开发环境
+
+tags:
+  - name: 认证
+    description: 登录与令牌刷新
+  - name: 测评作答
+    description: 学生作答链路（#1-#5）
+  - name: 判分与评分
+    description: 教师/学校评分与成绩管理（#6-#11、#21）
+  - name: 学生端结果
+    description: 学生成绩、曲线与课外上传（#12-#17）
+  - name: 数据统计
+    description: 多级统计与导出（#18-#20）
+  - name: 证书
+    description: 证书查询、下载与导出（#22-#26）
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/auth/login/:
+    post:
+      tags: [认证]
+      summary: 登录并获取 JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  format: password
+                  example: admin123456
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  access: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.access
+                  refresh: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /api/auth/refresh/:
+    post:
+      tags: [认证]
+      summary: 刷新访问令牌
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh]
+              properties:
+                refresh:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.refresh
+      responses:
+        '200':
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+
+  # ==================== 1. 测评作答 ====================
+  /api/exam/my-assessments/:
+    get:
+      tags: [测评作答]
+      summary: '#1 我可作答的测评列表'
+      description: 学生可见：状态已发布 + 在 start_at/end_at 时间窗口内 + 命中发布范围（班级/年级/学校/地区）。角色：学生。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 测评列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  list:
+                    - id: 1
+                      paper_id: 3
+                      title: 三年级音乐正式测评
+                      subject: music
+                      subject_display: 音乐
+                      ptype: formal
+                      ptype_display: 正式测评
+                      grade: 三年级
+                      duration: 30
+                      total_score: '100.00'
+                      question_count: 10
+                      start_at: '2026-10-21T01:00:00Z'
+                      end_at: '2026-10-21T02:00:00Z'
+                      sheet_id: null
+                      is_submitted: false
+                      my_score: null
+                  total: 1
+                  page: 1
+                  page_size: 20
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/my-assessments/{id}/:
+    get:
+      tags: [测评作答]
+      summary: '#2 试卷详情（含题目与音视频资源）'
+      description: '`id` 为发布记录 ID（即列表返回的 id）。未提交时不返回 answer/analysis。角色：学生。'
+      parameters:
+        - $ref: '#/components/parameters/PublishId'
+      responses:
+        '200':
+          description: 试卷详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  id: 1
+                  paper:
+                    id: 3
+                    title: 三年级音乐正式测评
+                    subject: music
+                    subject_display: 音乐
+                    ptype: formal
+                    ptype_display: 正式测评
+                    grade: 三年级
+                    duration: 30
+                    total_score: '100.00'
+                    question_count: 10
+                  start_at: '2026-10-21T01:00:00Z'
+                  end_at: '2026-10-21T02:00:00Z'
+                  is_open: true
+                  questions:
+                    - id: 11
+                      sort: 1
+                      qtype: single
+                      qtype_display: 单选题
+                      difficulty: easy
+                      grade: 三年级
+                      stem: do 的音名是？
+                      options:
+                        - {key: A, text: C}
+                        - {key: B, text: D}
+                      score: '10.00'
+                      resources:
+                        - {id: 5, rtype: audio, url: 'http://127.0.0.1:8000/media/question/2026/10/a.mp3'}
+                  sheet: null
+                  my_answers: []
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/answer-sheets/:
+    post:
+      tags: [测评作答]
+      summary: '#3 开始作答（创建答卷）'
+      description: 重复调用返回同一份答卷；测评未开始/已结束返回 409；已提交后再调用返回 409。角色：学生。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                publish_id:
+                  type: integer
+                  description: 发布记录 ID（推荐）
+                  example: 1
+                paper_id:
+                  type: integer
+                  description: 试卷 ID（与 publish_id 二选一）
+                  example: 3
+      responses:
+        '200':
+          description: 答卷信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: 开始作答
+                data:
+                  id: 12
+                  paper_id: 3
+                  publish_id: 1
+                  started_at: '2026-10-21T01:10:00Z'
+                  submitted_at: null
+                  is_submitted: false
+                  total_score: '0.00'
+        '400':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/answer-sheets/{id}/answers/:
+    put:
+      tags: [测评作答]
+      summary: '#4 保存答题进度'
+      description: 可多次调用覆盖；question_id 必须属于本试卷，否则 400；已提交返回 409。角色：学生。
+      parameters:
+        - $ref: '#/components/parameters/SheetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers:
+                  type: array
+                  items:
+                    type: object
+                    required: [question_id, answer]
+                    properties:
+                      question_id:
+                        type: integer
+                        example: 11
+                      answer:
+                        type: string
+                        example: A
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: 保存成功
+                data:
+                  sheet_id: 12
+                  saved: 3
+                  is_submitted: false
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/answer-sheets/{id}/submit/:
+    post:
+      tags: [测评作答]
+      summary: '#5 提交答卷（自动判分）'
+      description: 单选/多选/判断/填空自动判分，简答/听力/视唱待教师或 AI 评分；正式测评达 60% 自动发放证书。角色：学生。
+      parameters:
+        - $ref: '#/components/parameters/SheetId'
+      responses:
+        '200':
+          description: 判分结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: 提交成功
+                data:
+                  id: 12
+                  paper_id: 3
+                  publish_id: 1
+                  started_at: '2026-10-21T01:10:00Z'
+                  submitted_at: '2026-10-21T01:20:00Z'
+                  is_submitted: true
+                  total_score: '60.00'
+                  paper_total_score: '100.00'
+                  correct_count: 6
+                  wrong_count: 2
+                  subjective_pending: 2
+                  pass: true
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/my-assessments/records/:
+    get:
+      tags: [学生端结果]
+      summary: '#13 测评记录列表'
+      description: 当前学生全部答卷（含未提交）。角色：学生。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 测评记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  list:
+                    - sheet_id: 12
+                      publish_id: 1
+                      paper_id: 3
+                      title: 三年级音乐正式测评
+                      subject: music
+                      subject_display: 音乐
+                      ptype: formal
+                      ptype_display: 正式测评
+                      total_score: '100.00'
+                      my_score: '60.00'
+                      is_submitted: true
+                      started_at: '2026-10-21T01:10:00Z'
+                      submitted_at: '2026-10-21T01:20:00Z'
+                  total: 1
+                  page: 1
+                  page_size: 20
+
+  /api/exam/my-assessments/{id}/report/:
+    get:
+      tags: [学生端结果]
+      summary: '#12 测评统计分析报告'
+      description: 需已提交（超时未提交会先自动提交）；未开始作答 404，未提交 400。`id` 为发布 ID。角色：学生。
+      parameters:
+        - $ref: '#/components/parameters/PublishId'
+      responses:
+        '200':
+          description: 报告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  sheet_id: 12
+                  publish_id: 1
+                  paper_title: 三年级音乐正式测评
+                  subject: music
+                  subject_display: 音乐
+                  ptype: formal
+                  total_score: '100.00'
+                  my_score: '60.00'
+                  correct_rate: 0.6
+                  score_rate: 0.6
+                  correct_count: 6
+                  wrong_count: 2
+                  subjective_count: 2
+                  question_count: 10
+                  class_average: '62.50'
+                  class_size: 40
+                  submitted_at: '2026-10-21T01:20:00Z'
+                  details:
+                    - question_id: 11
+                      sort: 1
+                      qtype: single
+                      qtype_display: 单选题
+                      stem: do 的音名是？
+                      my_answer: A
+                      correct_answer: A
+                      analysis: C 大调主音为 do
+                      full_score: '10.00'
+                      score: '10.00'
+                      is_correct: true
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  # ==================== 2. 判分与评分 ====================
+  /api/exam/students/{student_id}/extracurricular/:
+    get:
+      tags: [判分与评分]
+      summary: '#6 查看学生课外学习材料'
+      description: 角色：教师 / 学校管理员；仅可查看本校（或管辖范围）学生。
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      responses:
+        '200':
+          description: 材料列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  student_id: 21
+                  list:
+                    - id: 5
+                      title: 课外绘画
+                      description: 自选主题
+                      image: 'http://127.0.0.1:8000/media/extracurricular/2026/10/work.png'
+                      created_at: '2026-10-21T01:30:00Z'
+                  total: 1
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/students/{student_id}/scores/:
+    get:
+      tags: [判分与评分]
+      summary: '#7 查看学生测评成绩'
+      description: 返回已提交测评成绩、平时表现评分与学科均分。角色：教师 / 学校管理员。
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      responses:
+        '200':
+          description: 学生成绩
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  student: {id: 21, username: stu001, real_name: 小明, student_no: '20260101'}
+                  exams:
+                    - sheet_id: 12
+                      paper_id: 3
+                      title: 三年级音乐正式测评
+                      subject: music
+                      subject_display: 音乐
+                      ptype: formal
+                      score: 60
+                      total_score: 100
+                      submitted_at: '2026-10-21T01:20:00Z'
+                  performances:
+                    - id: 8
+                      course: 音乐
+                      klass: 三年级一班
+                      score: 92
+                      comment: 课堂表现积极
+                      scorer: 王老师
+                      created_at: '2026-10-21T01:25:00Z'
+                  subject_average:
+                    音乐: 60
+        '403':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/students/{student_id}/scores/daily/:
+    post:
+      tags: [判分与评分]
+      summary: '#8 为学生平时表现评分'
+      description: 分数范围 0-100；klass_id 省略时自动取学生已通过审核的班级。角色：教师 / 学校管理员。
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [score]
+              properties:
+                score:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  example: 92
+                course_id:
+                  type: integer
+                  example: 1
+                klass_id:
+                  type: integer
+                  example: 2
+                comment:
+                  type: string
+                  example: 课堂表现积极
+      responses:
+        '200':
+          description: 评分成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: 评分成功
+                data: {id: 8, student_id: 21, score: 92, course: 音乐, comment: 课堂表现积极}
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/scores/template/:
+    get:
+      tags: [判分与评分]
+      summary: '#9 成绩导入模板下载'
+      description: 返回 xlsx 模板（列：学籍号 / 姓名 / 班级编号 / 学科 / 分数 / 评语）。角色：教师 / 学校管理员。Apifox 中需开启「保存响应到文件」。
+      responses:
+        '200':
+          description: Excel 模板
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /api/exam/scores/import/:
+    post:
+      tags: [判分与评分]
+      summary: '#10 导入学生线下成绩'
+      description: multipart 上传 xlsx；按学籍号（或姓名）匹配学生，越界/格式错误计入 errors。角色：教师 / 学校管理员。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: 导入结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: 导入完成
+                data:
+                  total: 2
+                  success: 1
+                  failed: 1
+                  errors:
+                    - {row: 3, error: 学生不存在或不在管理范围内}
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/scores/supplement/:
+    post:
+      tags: [判分与评分]
+      summary: '#11 测评成绩补录'
+      description: 学校/区县/市州使用；支持单条或 `items` 批量，补录记录写入平时表现评分并标注「测评补录」。角色：学校 / 区县 / 市州。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                student_id:
+                  type: integer
+                  example: 21
+                student_no:
+                  type: string
+                  example: '20260101'
+                score:
+                  type: number
+                  example: 88
+                course_id:
+                  type: integer
+                  example: 1
+                klass_id:
+                  type: integer
+                comment:
+                  type: string
+                  example: 因病补录
+                items:
+                  type: array
+                  description: 批量补录（提供后忽略顶层单条字段）
+                  items:
+                    type: object
+                    properties:
+                      student_id: {type: integer}
+                      student_no: {type: string}
+                      score: {type: number}
+                      course_id: {type: integer}
+                      klass_id: {type: integer}
+                      comment: {type: string}
+      responses:
+        '200':
+          description: 补录结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: 补录完成
+                data:
+                  success: 1
+                  failed: 0
+                  results:
+                    - {id: 9, student_id: 21, student_no: '20260101', score: 88}
+                  errors: []
+        '403':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/students/{student_id}/scores/export/:
+    get:
+      tags: [判分与评分]
+      summary: '#21 导出学生所有成绩'
+      description: 导出测评成绩 + 平时表现评分为 xlsx。角色：教师 / 学校管理员。
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      responses:
+        '200':
+          description: Excel 文件
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  # ==================== 3. 学生端结果 ====================
+  /api/exam/my-scores/:
+    get:
+      tags: [学生端结果]
+      summary: '#14 查看我的成绩'
+      description: 返回测评成绩、平时表现评分与按学科汇总。角色：学生。
+      responses:
+        '200':
+          description: 我的成绩
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  exams:
+                    - source: exam
+                      title: 三年级音乐正式测评
+                      subject: music
+                      subject_display: 音乐
+                      ptype: formal
+                      score: 60
+                      total_score: 100
+                      rate: 0.6
+                      date: '2026-10-21 09:20:00'
+                  performances:
+                    - source: daily
+                      title: 音乐评分
+                      subject: music
+                      subject_display: 音乐
+                      ptype: daily
+                      score: 92
+                      total_score: 100
+                      rate: 0.92
+                      date: '2026-10-21 09:25:00'
+                  by_subject:
+                    - {subject: music, subject_display: 音乐, count: 2, average_rate: 0.76}
+
+  /api/exam/my-scores/curve/:
+    get:
+      tags: [学生端结果]
+      summary: '#15 成绩曲线'
+      description: 按时间排序的成绩点，`rate` 为得分率（0-1）。角色：学生。
+      parameters:
+        - name: subject
+          in: query
+          description: 学科过滤
+          schema:
+            type: string
+            enum: [music, art]
+      responses:
+        '200':
+          description: 曲线数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  points:
+                    - source: exam
+                      title: 三年级音乐正式测评
+                      subject: music
+                      subject_display: 音乐
+                      ptype: formal
+                      score: 60
+                      total_score: 100
+                      rate: 0.6
+                      date: '2026-10-21 09:20:00'
+                  total: 1
+
+  /api/exam/my-growth/:
+    get:
+      tags: [学生端结果]
+      summary: '#16 个人成长曲线（音乐 / 美术）'
+      description: 按学科分组的成长数据（测评 + 平时表现）。角色：学生。
+      responses:
+        '200':
+          description: 成长曲线
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  series:
+                    - subject: music
+                      subject_display: 音乐
+                      count: 2
+                      average_rate: 0.76
+                      points: []
+                  total: 2
+
+  /api/exam/extracurricular/:
+    post:
+      tags: [学生端结果]
+      summary: '#17 上传课外自主学习图片'
+      description: multipart 上传；title 缺省为「课外学习成果」。角色：学生。
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                title:
+                  type: string
+                  example: 课外绘画
+                description:
+                  type: string
+                  example: 自选主题
+                image:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: 上传成功
+                data:
+                  id: 5
+                  title: 课外绘画
+                  image: 'http://127.0.0.1:8000/media/extracurricular/2026/10/work.png'
+                  description: 自选主题
+                  created_at: '2026-10-21T01:30:00Z'
+        '400':
+          $ref: '#/components/responses/Error'
+
+  # ==================== 4. 数据统计 ====================
+  /api/exam/stats/assessment/:
+    get:
+      tags: [数据统计]
+      summary: '#18 测评数据统计'
+      description: 按账号层级自动收敛数据范围；可按学校/地区/年级/学科/类型过滤。角色：学校 / 区县 / 市州 / 省级。
+      parameters:
+        - name: school_id
+          in: query
+          schema: {type: integer}
+        - name: region_id
+          in: query
+          schema: {type: integer}
+        - name: grade
+          in: query
+          schema: {type: string, example: 三年级}
+        - name: subject
+          in: query
+          schema: {type: string, enum: [music, art]}
+        - name: ptype
+          in: query
+          schema: {type: string, enum: [practice, formal]}
+      responses:
+        '200':
+          description: 统计结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  summary:
+                    student_total: 400
+                    participant_count: 380
+                    submission_count: 380
+                    participation_rate: 0.95
+                    average_score_rate: 0.78
+                    pass_rate: 0.92
+                  by_subject:
+                    - {key: music, label: 音乐, participant_count: 380, submission_count: 380, average_score_rate: 0.78, pass_rate: 0.92}
+                  by_grade:
+                    - {key: 三年级, label: 三年级, participant_count: 380, submission_count: 380, average_score_rate: 0.78, pass_rate: 0.92}
+                  by_school:
+                    - {key: 测试学校, label: 测试学校, participant_count: 380, submission_count: 380, average_score_rate: 0.78, pass_rate: 0.92}
+        '403':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/stats/assessment/export/:
+    get:
+      tags: [数据统计]
+      summary: '#19 统计导出 Excel'
+      description: 查询参数同 #18。角色：学校 / 区县 / 市州 / 省级。
+      parameters:
+        - name: school_id
+          in: query
+          schema: {type: integer}
+        - name: region_id
+          in: query
+          schema: {type: integer}
+        - name: grade
+          in: query
+          schema: {type: string}
+        - name: subject
+          in: query
+          schema: {type: string, enum: [music, art]}
+        - name: ptype
+          in: query
+          schema: {type: string, enum: [practice, formal]}
+      responses:
+        '200':
+          description: Excel 文件
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /api/exam/stats/participation/export/:
+    get:
+      tags: [数据统计]
+      summary: '#20 测评参与率导出（省级）'
+      description: 按学校导出学生数 / 参与人数 / 参与率。角色：省级管理员（区县等调用返回 403）。
+      parameters:
+        - name: region_id
+          in: query
+          description: 限制到某个市州
+          schema: {type: integer}
+      responses:
+        '200':
+          description: Excel 文件
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '403':
+          $ref: '#/components/responses/Error'
+
+  # ==================== 5. 证书 ====================
+  /api/exam/certificates/:
+    get:
+      tags: [证书]
+      summary: '#22 我的证书列表'
+      description: 学生本人证书。角色：学生。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 证书列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+              example:
+                code: 0
+                message: ok
+                data:
+                  list:
+                    - id: 8
+                      title: 音乐正式测评证书
+                      subject: music
+                      subject_display: 音乐
+                      student_id: 21
+                      student_name: 小明
+                      sheet_id: 12
+                      score: 60
+                      file: ''
+                      created_at: '2026-10-21T01:20:01Z'
+                  total: 1
+                  page: 1
+                  page_size: 20
+
+  /api/exam/certificates/{id}/:
+    get:
+      tags: [证书]
+      summary: '#23 证书详情'
+      description: 仅本人证书。角色：学生。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer}
+      responses:
+        '200':
+          description: 证书详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/certificates/{id}/download/:
+    get:
+      tags: [证书]
+      summary: '#24 下载证书'
+      description: 无附件时自动生成 HTML 证书并返回附件。角色：学生。
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer}
+      responses:
+        '200':
+          description: 证书文件
+          content:
+            text/html:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/students/{student_id}/certificates/:
+    get:
+      tags: [证书]
+      summary: '#25 查看学生证书（教师）'
+      description: 角色：教师 / 学校管理员。
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      responses:
+        '200':
+          description: 学生证书
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '403':
+          $ref: '#/components/responses/Error'
+
+  /api/exam/students/{student_id}/certificates/export/:
+    get:
+      tags: [证书]
+      summary: '#26 导出学生证书'
+      description: 导出学生全部证书为 xlsx。角色：教师 / 学校管理员。
+      parameters:
+        - $ref: '#/components/parameters/StudentId'
+      responses:
+        '200':
+          description: Excel 文件
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: '先调用登录接口获取 access，再填入 Authorization: Bearer <access>'
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: 页码，从 1 开始
+      schema: {type: integer, default: 1}
+    PageSize:
+      name: page_size
+      in: query
+      description: 每页条数，最大 100
+      schema: {type: integer, default: 20}
+    PublishId:
+      name: id
+      in: path
+      required: true
+      description: 发布记录 ID（PaperPublish.id）
+      schema: {type: integer, example: 1}
+    SheetId:
+      name: id
+      in: path
+      required: true
+      description: 答卷 ID（AnswerSheet.id）
+      schema: {type: integer, example: 12}
+    StudentId:
+      name: student_id
+      in: path
+      required: true
+      description: 学生用户 ID
+      schema: {type: integer, example: 21}
+
+  responses:
+    Error:
+      description: 业务错误（统一信封，code 为错误码）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponse'
+          example:
+            code: 403
+            message: 没有操作权限
+            data: null
+
+  schemas:
+    ApiResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          description: 0 成功；400 参数错误；401 未认证；403 无权限；404 不存在；409 冲突；500 服务端错误
+          example: 0
+        message:
+          type: string
+          example: ok
+        data:
+          nullable: true
+          description: 业务数据；列表接口为 {list, total, page, page_size}
