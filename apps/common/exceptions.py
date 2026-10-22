@@ -1,6 +1,7 @@
 """全局异常处理与自定义业务异常。"""
 import logging
 
+from django.http import Http404
 from rest_framework import exceptions as drf_exc
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
@@ -21,6 +22,13 @@ class ApiException(Exception):
 
 
 def custom_exception_handler(exc, context):
+    # Django Http404（get_object_or_404 抛出，不是 DRF 的 NotFound）
+    if isinstance(exc, Http404):
+        return Response(
+            {"code": ErrorCode.NOT_FOUND, "message": "资源不存在", "data": None},
+            status=404,
+        )
+
     response = exception_handler(exc, context)
 
     # DRF 能识别的异常
@@ -50,8 +58,10 @@ def custom_exception_handler(exc, context):
                 {"code": ErrorCode.NOT_FOUND, "message": "资源不存在", "data": None},
                 status=404,
             )
+        # 兜底：DRF 返回了 response 但我们没显式处理的类型
+        detail = getattr(exc, "detail", None) or str(exc)
         return Response(
-            {"code": ErrorCode.SERVER_ERROR, "message": str(exc.detail), "data": None},
+            {"code": response.status_code, "message": str(detail), "data": None},
             status=response.status_code,
         )
 
