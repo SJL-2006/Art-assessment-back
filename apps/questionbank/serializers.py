@@ -16,9 +16,12 @@ class ChapterSerializer(serializers.ModelSerializer):
 
 
 class QuestionResourceSerializer(serializers.ModelSerializer):
+    """试题资源：file 必填、rtype 由模型 choices 校验；question 由嵌套路由注入，设为只读。"""
+
     class Meta:
         model = QuestionResource
         fields = "__all__"
+        read_only_fields = ["question"]
 
 
 class QuestionSerializer(serializers.ModelSerializer):
@@ -35,3 +38,10 @@ class QuestionReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuestionReview
         fields = "__all__"
+
+
+class ReviewRequestSerializer(serializers.Serializer):
+    """审核请求体，仅接收 result 与 comment。"""
+
+    result = serializers.ChoiceField(choices=QuestionReview.RESULT_CHOICES)
+    comment = serializers.CharField(required=False, allow_blank=True, default="")
