@@ -166,6 +166,57 @@ class Answer(BaseModel):
         verbose_name_plural = "答题明细"
 
 
+class PerformanceScore(BaseModel):
+    """平时表现评分（教师对学生日常艺术表现的评分）。"""
+    student = models.ForeignKey(
+        "users.User", on_delete=models.CASCADE,
+        related_name="performance_scores", verbose_name="学生",
+    )
+    klass = models.ForeignKey(
+        "classroom.ClassRoom", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="performance_scores", verbose_name="班级",
+    )
+    course = models.ForeignKey(
+        "questionbank.Course", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="performance_scores", verbose_name="学科",
+    )
+    scorer = models.ForeignKey(
+        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="given_performance_scores", verbose_name="评分教师",
+    )
+    score = models.DecimalField("评分", max_digits=5, decimal_places=2, default=0)
+    comment = models.TextField("评语", blank=True)
+
+    class Meta:
+        db_table = "exam_performance_score"
+        verbose_name = "平时表现评分"
+        verbose_name_plural = "平时表现评分"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.student} - {self.score}"
+
+
+class ExtracurricularUpload(BaseModel):
+    """学生课外自主学习成果（图片）。"""
+    student = models.ForeignKey(
+        "users.User", on_delete=models.CASCADE,
+        related_name="extracurricular_uploads", verbose_name="学生",
+    )
+    title = models.CharField("标题", max_length=128)
+    image = models.FileField("图片", upload_to="extracurricular/%Y/%m/")
+    description = models.TextField("说明", blank=True)
+
+    class Meta:
+        db_table = "exam_extracurricular_upload"
+        verbose_name = "课外学习上传"
+        verbose_name_plural = "课外学习上传"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
+
+
 class Certificate(BaseModel):
     """证书。"""
     student = models.ForeignKey(

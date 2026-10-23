@@ -2,6 +2,16 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from apps.exam.models import (
+    Answer,
+    AnswerSheet,
+    Certificate,
+    ExtracurricularUpload,
+    Paper,
+    PaperPublish,
+    PaperQuestion,
+    PerformanceScore,
+)
 from apps.classroom.models import ClassRoom
 from apps.exam.models import Answer, AnswerSheet, Certificate, Paper, PaperPublish, PaperQuestion
 from apps.org.models import Region, School
@@ -74,6 +84,24 @@ class CertificateSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class PerformanceScoreSerializer(serializers.ModelSerializer):
+    """平时表现评分。"""
+    student_name = serializers.CharField(source="student.real_name", read_only=True)
+    course_name = serializers.CharField(source="course.name", read_only=True)
+    scorer_name = serializers.CharField(source="scorer.real_name", read_only=True)
+
+    class Meta:
+        model = PerformanceScore
+        fields = "__all__"
+
+
+class ExtracurricularUploadSerializer(serializers.ModelSerializer):
+    """学生课外学习成果。"""
+
+    class Meta:
+        model = ExtracurricularUpload
+        fields = "__all__"
+        read_only_fields = ["student"]
 class QtypeConfigSerializer(serializers.Serializer):
     """自动组卷：单种题型的抽题配置。"""
 
