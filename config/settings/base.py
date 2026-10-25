@@ -155,9 +155,9 @@ SPECTACULAR_SETTINGS = {
 # 操作日志中间件开关（可在 .env 中覆盖）
 OPERATION_LOG_ENABLED = os.environ.get("OPERATION_LOG_ENABLED", "1") == "1"
 
-# ---------------- Claude / Anthropic ----------------
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "").strip() or None
-ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest").strip()
-ANTHROPIC_MAX_TOKENS = int(os.environ.get("ANTHROPIC_MAX_TOKENS", "1024"))
-ANTHROPIC_TIMEOUT = float(os.environ.get("ANTHROPIC_TIMEOUT", "30"))
+# ---------------- DeepSeek（OpenAI 兼容接口） ----------------
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat").strip()
+DEEPSEEK_MAX_TOKENS = int(os.environ.get("DEEPSEEK_MAX_TOKENS", "1024"))
+DEEPSEEK_TIMEOUT = float(os.environ.get("DEEPSEEK_TIMEOUT", "60"))

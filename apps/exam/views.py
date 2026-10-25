@@ -1,6 +1,6 @@
 from rest_framework.decorators import action
 
-from apps.common.claude_service import get_claude_service
+from apps.common.deepseek_service import get_deepseek_service
 from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
 from apps.common.response import ApiResponse
@@ -339,7 +339,7 @@ class AnswerViewSet(BaseViewSet):
         permission_classes=[has_role(User.ROLE_TEACHER, User.ROLE_SCHOOL)],
     )
     def ai_grade(self, request, pk=None):
-        """对指定答题记录进行 AI 评分（调用 Claude）。
+        """对指定答题记录进行 AI 评分（调用 DeepSeek）。
 
         POST /api/exam/answers/{id}/ai-grade/
         可选 body: { "save": true }  — 是否把评分写回数据库（默认 true）
@@ -359,7 +359,7 @@ class AnswerViewSet(BaseViewSet):
         if not answer.answer.strip():
             raise ApiException("学生未作答，无法评分", status=400)
 
-        result = get_claude_service().grade_answer(
+        result = get_deepseek_service().grade_answer(
             question_content=question.stem,
             reference_answer=question.answer,
             student_answer=answer.answer,
@@ -412,7 +412,7 @@ class AnswerViewSet(BaseViewSet):
                 results.append({"answer_id": ans.id, "skipped": True, "reason": "未作答"})
                 continue
             try:
-                r = get_claude_service().grade_answer(
+                r = get_deepseek_service().grade_answer(
                     question_content=q.stem,
                     reference_answer=q.answer,
                     student_answer=ans.answer,

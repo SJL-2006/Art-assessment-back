@@ -1,9 +1,9 @@
-"""Claude / Anthropic 封装服务。
+"""DeepSeek（OpenAI 兼容接口）封装服务。
 
 设计原则：
 - 服务层独立于视图，便于单元测试和扩展（组卷、证书文案等都复用同一 client）。
 - 所有对外方法在 API Key 未配置时抛 ApiException，由全局异常处理器转译。
-- 同步实现（Django 默认同步），如需高并发可换 AsyncAnthropic。
+- 同步实现（Django 默认同步），如需高并发可换 AsyncOpenAI。
 """
 from __future__ import annotations
 
@@ -20,15 +20,15 @@ from apps.common.response import ErrorCode
 logger = logging.getLogger("django")
 
 
-class ClaudeService:
-    """对 Anthropic Python SDK 的薄封装，提供项目内统一的调用入口。"""
+class DeepSeekService:
+    """对 DeepSeek OpenAI 兼容接口的薄封装，提供项目内统一的调用入口。"""
 
     def __init__(self) -> None:
-        self.api_key = settings.ANTHROPIC_API_KEY
-        self.base_url = settings.ANTHROPIC_BASE_URL
-        self.model = settings.ANTHROPIC_MODEL
-        self.max_tokens = settings.ANTHROPIC_MAX_TOKENS
-        self.timeout = settings.ANTHROPIC_TIMEOUT
+        self.api_key = settings.DEEPSEEK_API_KEY
+        self.base_url = settings.DEEPSEEK_BASE_URL
+        self.model = settings.DEEPSEEK_MODEL
+        self.max_tokens = settings.DEEPSEEK_MAX_TOKENS
+        self.timeout = settings.DEEPSEEK_TIMEOUT
         self._client: Optional[Any] = None
 
     # ---------- 懒加载 client ---------- #
@@ -37,20 +37,20 @@ class ClaudeService:
         if self._client is None:
             if not self.api_key:
                 raise ApiException(
-                    "未配置 ANTHROPIC_API_KEY，无法调用 Claude。请在 .env 中设置。",
+                    "未配置 DEEPSEEK_API_KEY，无法调用 DeepSeek。请在 .env 中设置。",
                     code=ErrorCode.CONFLICT,
                     status=503,
                 )
             try:
-                import anthropic
+                from openai import OpenAI
             except ImportError as exc:
                 raise ApiException(
-                    "未安装 anthropic SDK，请执行: pip install anthropic",
+                    "未安装 openai SDK，请执行: pip install openai",
                     code=ErrorCode.SERVER_ERROR,
                     status=500,
                 ) from exc
 
-            self._client = anthropic.Anthropic(
+            self._client = OpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url,
                 timeout=self.timeout,
@@ -66,36 +66,36 @@ class ClaudeService:
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
     ) -> str:
-        """发送单轮消息并返回 Claude 文本响应。"""
+        """发送单轮消息并返回 DeepSeek 文本响应。"""
         if not user_prompt.strip():
             raise ApiException("prompt 不能为空", code=ErrorCode.INVALID_PARAM, status=400)
 
-        kwargs: dict[str, Any] = {
-            "model": self.model,
-            "max_tokens": max_tokens or self.max_tokens,
-            "temperature": temperature,
-            "messages": [{"role": "user", "content": user_prompt}],
-        }
+        messages: list[dict[str, str]] = []
         if system_prompt:
-            kwargs["system"] = system_prompt
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
 
         try:
-            resp = self.client.messages.create(**kwargs)
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens or self.max_tokens,
+            )
         except Exception as exc:  # noqa: BLE001 — SDK 可能抛出多种异常
-            logger.error("Claude API 调用失败: %s", exc)
+            logger.error("DeepSeek API 调用失败: %s", exc)
             raise ApiException(
-                f"Claude API 调用失败: {exc}",
+                f"DeepSeek API 调用失败: {exc}",
                 code=ErrorCode.SERVER_ERROR,
                 status=502,
             ) from exc
 
-        # 拼接所有 text block
-        text_parts: list[str] = []
-        for block in getattr(resp, "content", []) or []:
-            block_type = getattr(block, "type", None)
-            if block_type == "text":
-                text_parts.append(block.text)
-        return "\n".join(text_parts).strip()
+        content = ""
+        choices = getattr(resp, "choices", None) or []
+        if choices:
+            message = getattr(choices[0], "message", None)
+            content = getattr(message, "content", "") or ""
+        return content.strip()
 
     # ---------- 业务：主观题评分 ---------- #
     # 评分结果数据结构
@@ -125,7 +125,7 @@ class ClaudeService:
         student_answer: str,
         max_score: float = 10.0,
     ) -> GradeResult:
-        """调用 Claude 对一道主观题进行 AI 评分。
+        """调用 DeepSeek 对一道主观题进行 AI 评分。
 
         :param question_content: 题干
         :param reference_answer: 参考答案
@@ -143,7 +143,7 @@ class ClaudeService:
         raw = self.send_message(
             prompt,
             system_prompt=self._grade_system_prompt(),
-            temperature=0.3,  # 评分要客观，降低随机性
+            temperature=0.3,  # 评分要客观，降低随机性（deepseek-reasoner 不支持 temperature，评分请用 deepseek-chat）
             max_tokens=512,
         )
 
@@ -151,7 +151,7 @@ class ClaudeService:
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
-            logger.error("Claude 返回非 JSON，原始响应: %s", raw)
+            logger.error("DeepSeek 返回非 JSON，原始响应: %s", raw)
             raise ApiException(
                 "AI 返回格式异常，无法解析评分结果",
                 code=ErrorCode.SERVER_ERROR,
@@ -172,11 +172,11 @@ class ClaudeService:
 
 
 # 单例：全局共享一个 client
-_claude_service: Optional[ClaudeService] = None
+_deepseek_service: Optional[DeepSeekService] = None
 
 
-def get_claude_service() -> ClaudeService:
-    global _claude_service
-    if _claude_service is None:
-        _claude_service = ClaudeService()
-    return _claude_service
+def get_deepseek_service() -> DeepSeekService:
+    global _deepseek_service
+    if _deepseek_service is None:
+        _deepseek_service = DeepSeekService()
+    return _deepseek_service
