@@ -2,6 +2,7 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.http import HttpResponse
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -21,6 +22,13 @@ logs_router.register("", LogViewSet, basename="log")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # 根路径欢迎页
+    path("", lambda r: HttpResponse(
+        "<h1>🎨 艺术测评系统后端</h1>"
+        "<p>API 文档：<a href='/api/docs/'>Swagger UI</a></p>"
+        "<p>API Schema：<a href='/api/schema/'>OpenAPI JSON</a></p>"
+        "<p>Django Admin：<a href='/admin/'>/admin/</a></p>"
+    )),
     # 认证
     path("api/auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
