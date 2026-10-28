@@ -75,6 +75,10 @@ class AccountViewSet(BaseViewSet):
                 | Q(student_no__icontains=keyword)
                 | Q(real_name__icontains=keyword)
             )
+        # 按是否市直属过滤（市直属学校账号：role=school 且所属学校 is_directly_affiliated）
+        directly = self.request.query_params.get("directly_affiliated")
+        if directly is not None:
+            qs = qs.filter(school__is_directly_affiliated=directly in ("1", "true", "True"))
         # 按 scope 收敛
         qs = filter_by_scope(qs, self.request.user, school_field="school", region_field="region")
         return qs

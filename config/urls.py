@@ -42,6 +42,7 @@ urlpatterns = [
     path("api/classroom/", include("apps.classroom.urls")),
     path("api/questionbank/", include("apps.questionbank.urls")),
     path("api/exam/", include("apps.exam.urls")),
+    path("api/content/", include("apps.content.urls")),
     # 系统
     path("api/logs/", include(logs_router.urls)),
 ]

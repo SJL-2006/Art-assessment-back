@@ -43,6 +43,7 @@ class School(BaseModel):
     address = models.CharField("地址", max_length=255, blank=True)
     contact = models.CharField("联系人", max_length=64, blank=True)
     phone = models.CharField("联系电话", max_length=32, blank=True)
+    is_directly_affiliated = models.BooleanField("市直属", default=False)
 
     class Meta:
         db_table = "org_school"

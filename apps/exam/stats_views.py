@@ -60,7 +60,8 @@ def _summary(sheets, students):
     """汇总统计指标。"""
     rows = list(sheets.values("student_id", "total_score", "paper__subject", "paper__grade",
                               "paper__total_score", "student__school__name",
-                              "student__school__region__name"))
+                              "student__school__region__name",
+                              "student__school__region__parent__name"))
     participant_ids = {row["student_id"] for row in rows}
     total = len(rows)
     passed = 0
@@ -126,6 +127,9 @@ def _subject_label(code):
 
 
 def _build_stats(request):
+    # 先兜底提交已到期的未交答卷，避免学生超时未交导致漏统计、漏发证书
+    services.auto_submit_overdue_sheets()
+
     sheets = _filtered_sheets(request)
     students = services.scoped_students(request.user)
     params = request.query_params
@@ -142,11 +146,17 @@ def _build_stats(request):
                       lambda r: r["paper__grade"] or "未填年级")
     by_school = _group(rows, lambda r: r["student__school__name"] or "",
                        lambda r: r["student__school__name"] or "")
+    by_region = _group(rows, lambda r: r["student__school__region__name"] or "未填地区",
+                       lambda r: r["student__school__region__name"] or "未填地区")
+    by_city = _group(rows, lambda r: r["student__school__region__parent__name"] or "未填市州",
+                     lambda r: r["student__school__region__parent__name"] or "未填市州")
     return {
         "summary": summary,
         "by_subject": by_subject,
         "by_grade": by_grade,
         "by_school": by_school,
+        "by_region": by_region,
+        "by_city": by_city,
     }
 
 
@@ -182,6 +192,8 @@ class StatsAssessmentExportView(APIView):
             ("学科", stats["by_subject"]),
             ("年级", stats["by_grade"]),
             ("学校", stats["by_school"]),
+            ("地区", stats["by_region"]),
+            ("市州", stats["by_city"]),
         ):
             for item in items:
                 rows.append([

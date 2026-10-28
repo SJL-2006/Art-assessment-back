@@ -64,6 +64,12 @@ urlpatterns = [
     ),
     # 学生成长曲线
     path("my-growth/", student_views.MyGrowthView.as_view(), name="my_growth"),
+    # 学生查看班级测评信息
+    path(
+        "my-class/assessments/",
+        student_views.MyClassAssessmentView.as_view(),
+        name="my_class_assessments",
+    ),
     # 数据统计
     path("stats/assessment/", stats_views.StatsAssessmentView.as_view(), name="stats_assessment"),
     path(

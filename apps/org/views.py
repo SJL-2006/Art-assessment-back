@@ -70,6 +70,10 @@ class SchoolViewSet(BaseViewSet):
         region = self.request.query_params.get("region")
         if region:
             qs = qs.filter(region_id=region)
+        # 按是否市直属过滤
+        directly = self.request.query_params.get("directly_affiliated")
+        if directly is not None:
+            qs = qs.filter(is_directly_affiliated=directly in ("1", "true", "True"))
         # 按当前用户 scope 收敛
         qs = filter_by_scope(qs, self.request.user, region_field="region", school_field=None)
         return qs

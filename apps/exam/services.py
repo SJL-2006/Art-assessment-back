@@ -257,6 +257,29 @@ def ensure_sheet_editable(sheet):
         raise ApiException("测评已结束，答卷已自动提交", ErrorCode.CONFLICT, 409)
 
 
+def auto_submit_overdue_sheets(now=None):
+    """把已到结束时间仍未提交的答卷全部自动提交（幂等），返回提交份数。
+
+    用于「测评限时自动提交」：既可由定时任务调用，也可在统计接口前兜底调用，
+    避免学生超时未交导致漏统计、漏发证书。
+    """
+    now = now or timezone.now()
+    overdue = (
+        AnswerSheet.objects.filter(
+            is_submitted=False,
+            is_deleted=False,
+            publish__end_at__isnull=False,
+            publish__end_at__lt=now,
+        )
+        .select_related("publish", "paper")
+    )
+    submitted = 0
+    for sheet in overdue:
+        submit_sheet(sheet)
+        submitted += 1
+    return submitted
+
+
 # --------------------------------------------------------------------------
 # 证书
 # --------------------------------------------------------------------------
