@@ -17,6 +17,16 @@ from apps.questionbank.serializers import (
 )
 from apps.users.models import User
 
+# 各管理端在手动组卷时需要浏览题库，故对课程/章节/试题开放只读权限
+MANAGEMENT_ROLES = (
+    User.ROLE_SCHOOL,
+    User.ROLE_DISTRICT,
+    User.ROLE_CITY,
+    User.ROLE_PROVINCE,
+)
+CATALOG_READ_ROLES = (User.ROLE_STUDENT, User.ROLE_TEACHER, User.ROLE_QB_ADMIN) + MANAGEMENT_ROLES
+QUESTION_READ_ROLES = (User.ROLE_TEACHER, User.ROLE_QB_ADMIN) + MANAGEMENT_ROLES
+
 
 class CourseViewSet(BaseViewSet):
     """课程 CRUD。"""
@@ -27,7 +37,7 @@ class CourseViewSet(BaseViewSet):
 
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
-            return [has_role(User.ROLE_STUDENT, User.ROLE_TEACHER, User.ROLE_QB_ADMIN)()]
+            return [has_role(*CATALOG_READ_ROLES)()]
         return [has_role(User.ROLE_QB_ADMIN)()]
 
 
@@ -40,7 +50,7 @@ class ChapterViewSet(BaseViewSet):
 
     def get_permissions(self):
         if self.action in ("list", "retrieve"):
-            return [has_role(User.ROLE_STUDENT, User.ROLE_TEACHER, User.ROLE_QB_ADMIN)()]
+            return [has_role(*CATALOG_READ_ROLES)()]
         return [has_role(User.ROLE_QB_ADMIN)()]
 
     def get_queryset(self):
@@ -61,6 +71,8 @@ class QuestionViewSet(BaseViewSet):
     def get_permissions(self):
         if self.action in ("review_question", "list_reviews"):
             return [has_role(User.ROLE_QB_ADMIN)()]
+        if self.action in ("list", "retrieve"):
+            return [has_role(*QUESTION_READ_ROLES)()]
         return [has_role(User.ROLE_TEACHER, User.ROLE_QB_ADMIN)()]
 
     def get_queryset(self):
