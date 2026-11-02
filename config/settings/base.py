@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "drf_spectacular",
+    "drf_spectacular_sidecar",
     # 业务应用
     "apps.common",
     "apps.org",
@@ -150,6 +151,10 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "POSTPROCESSING_HOOKS": ["apps.common.schema.chinese_postprocess"],
+    # Swagger/Redoc 静态资源走本地 sidecar（生产环境国内访问 CDN 不稳定）
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "REDOC_DIST": "SIDECAR",
 }
 
 # ---------------- 业务 ----------------
