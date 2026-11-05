@@ -7,6 +7,7 @@ router = DefaultRouter()
 router.register("courses", views.CourseViewSet, basename="course")
 router.register("chapters", views.ChapterViewSet, basename="chapter")
 router.register("questions", views.QuestionViewSet, basename="question")
+router.register("resources", views.QuestionResourceViewSet, basename="resource")
 
 urlpatterns = [
     # 试题资源删除：questions/{pk}/resources/{rid}/

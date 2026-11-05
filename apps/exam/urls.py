@@ -3,7 +3,10 @@
 B 域：papers / paper-questions / publishes（views.py）
 C 域：作答、判分评分、成绩、学生结果、统计、证书
      （answer_views / score_views / student_views / stats_views / certificate_views）
+补丁：practice（B）、fun-contents（C）、cert-uploads（C）
 """
+import logging
+
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
@@ -16,6 +19,8 @@ from apps.exam import (
     student_views,
     views,
 )
+
+log = logging.getLogger(__name__)
 
 router = DefaultRouter()
 # ---- B 域 ----
@@ -32,6 +37,23 @@ router.register("extracurricular", student_views.ExtracurricularViewSet, basenam
 router.register("answers", views.AnswerViewSet, basename="answer")
 # ---- 学生练习测评 ----
 router.register("practice", practice_views.PracticeViewSet, basename="practice")
+
+# ---- 补丁路由：B/C 视图类就绪后自动注册，未就绪时跳过不阻塞启动 ----
+try:
+    from apps.exam import practice_views  # B 负责
+    router.register("practice", practice_views.PracticeViewSet, basename="practice")
+except (ImportError, AttributeError):
+    log.warning("exam.practice_views.PracticeViewSet 尚未实现，practice 路由未注册")
+
+try:
+    router.register("fun-contents", views.FunContentViewSet, basename="fun_content")
+except AttributeError:
+    log.warning("exam.views.FunContentViewSet 尚未实现，fun-contents 路由未注册")
+
+try:
+    router.register("cert-uploads", student_views.UploadedCertificateViewSet, basename="cert_upload")
+except AttributeError:
+    log.warning("exam.student_views.UploadedCertificateViewSet 尚未实现，cert-uploads 路由未注册")
 
 urlpatterns = [
     # 判分与评分

@@ -154,3 +154,33 @@ class QuestionViewSet(BaseViewSet):
         question = self.get_object()
         reviews = question.reviews.all()
         return ApiResponse(QuestionReviewSerializer(reviews, many=True).data)
+
+
+# 试题资源独立管理：列表/详情对教师、题库管理员、省级开放；写操作仅题库管理员、省级
+RESOURCE_READ_ROLES = (User.ROLE_TEACHER, User.ROLE_QB_ADMIN, User.ROLE_PROVINCE)
+RESOURCE_WRITE_ROLES = (User.ROLE_QB_ADMIN, User.ROLE_PROVINCE)
+
+
+class QuestionResourceViewSet(BaseViewSet):
+    """试题资源独立管理（音频/图片/视频）。"""
+
+    queryset = QuestionResource.objects.all()
+    serializer_class = QuestionResourceSerializer
+    search_fields = []
+    ordering_fields = ["id"]
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [has_role(*RESOURCE_READ_ROLES)()]
+        return [has_role(*RESOURCE_WRITE_ROLES)()]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        params = self.request.query_params
+        question = params.get("question")
+        rtype = params.get("rtype")
+        if question:
+            qs = qs.filter(question_id=question)
+        if rtype:
+            qs = qs.filter(rtype=rtype)
+        return qs
