@@ -237,3 +237,129 @@ class Certificate(BaseModel):
 
     def __str__(self):
         return self.title
+
+
+class UploadedCertificate(BaseModel):
+    """学生上传证书（待教师审核）。"""
+
+    CERT_EXAM = "exam"
+    CERT_COMPETITION = "competition"
+    CERT_GRADUATION = "graduation"
+    CERT_OTHER = "other"
+    CERT_TYPE_CHOICES = [
+        (CERT_EXAM, "考试证书"),
+        (CERT_COMPETITION, "竞赛证书"),
+        (CERT_GRADUATION, "毕业证书"),
+        (CERT_OTHER, "其他"),
+    ]
+
+    SUBJECT_ART = "art"
+    SUBJECT_MUSIC = "music"
+    SUBJECT_COMPREHENSIVE = "comprehensive"
+    SUBJECT_OTHER = "other"
+    SUBJECT_CHOICES = [
+        (SUBJECT_ART, "美术"),
+        (SUBJECT_MUSIC, "音乐"),
+        (SUBJECT_COMPREHENSIVE, "综合"),
+        (SUBJECT_OTHER, "其他"),
+    ]
+
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "待审核"),
+        (STATUS_APPROVED, "已通过"),
+        (STATUS_REJECTED, "已驳回"),
+    ]
+
+    student = models.ForeignKey(
+        "users.User", on_delete=models.CASCADE,
+        related_name="uploaded_certificates", verbose_name="上传学生",
+    )
+    title = models.CharField("证书标题", max_length=128)
+    cert_type = models.CharField(
+        "证书类型", max_length=16, choices=CERT_TYPE_CHOICES, default=CERT_OTHER,
+    )
+    subject = models.CharField(
+        "学科", max_length=16, choices=SUBJECT_CHOICES, default=SUBJECT_OTHER,
+    )
+    issuer = models.CharField("颁发机构", max_length=128, blank=True, default="")
+    obtained_at = models.DateField("获得日期", null=True, blank=True)
+    image = models.ImageField("证书图片", upload_to="cert-uploads/%Y/%m/")
+    note = models.TextField("备注", blank=True, default="")
+    status = models.CharField(
+        "审核状态", max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING,
+    )
+    reviewer = models.ForeignKey(
+        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reviewed_certificates", verbose_name="审核人",
+    )
+    review_comment = models.TextField("审核意见", blank=True, default="")
+    reviewed_at = models.DateTimeField("审核时间", null=True, blank=True)
+
+    class Meta:
+        db_table = "exam_uploaded_certificate"
+        verbose_name = "学生上传证书"
+        verbose_name_plural = "学生上传证书"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
+
+
+class FunContent(BaseModel):
+    """趣味课堂内容（省级发布，学生可见）。"""
+
+    SUBJECT_ART = "art"
+    SUBJECT_MUSIC = "music"
+    SUBJECT_GENERAL = "general"
+    SUBJECT_CHOICES = [
+        (SUBJECT_ART, "美术"),
+        (SUBJECT_MUSIC, "音乐"),
+        (SUBJECT_GENERAL, "综合"),
+    ]
+
+    STATUS_DRAFT = "draft"
+    STATUS_PUBLISHED = "published"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "草稿"),
+        (STATUS_PUBLISHED, "已发布"),
+    ]
+
+    title = models.CharField("标题", max_length=128)
+    subject = models.CharField(
+        "学科", max_length=16, choices=SUBJECT_CHOICES, default=SUBJECT_GENERAL,
+    )
+    category = models.CharField("分类", max_length=64, blank=True, default="")
+    summary = models.CharField("摘要", max_length=255, blank=True, default="")
+    content = models.TextField("正文", blank=True, default="")
+    fun_fact = models.TextField("趣味小知识", blank=True, default="")
+    emoji = models.CharField("表情图标", max_length=16, blank=True, default="")
+    color = models.CharField("主题色", max_length=16, blank=True, default="")
+    read_minutes = models.IntegerField("阅读时长(分钟)", default=3)
+    status = models.CharField(
+        "状态", max_length=16, choices=STATUS_CHOICES, default=STATUS_DRAFT,
+    )
+    creator = models.ForeignKey(
+        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="created_fun_contents", verbose_name="创建人",
+    )
+    school = models.ForeignKey(
+        "org.School", on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="目标学校",
+    )
+    target_class = models.ForeignKey(
+        "classroom.ClassRoom", on_delete=models.SET_NULL, null=True, blank=True,
+        verbose_name="目标班级",
+    )
+    published_at = models.DateTimeField("发布时间", null=True, blank=True)
+
+    class Meta:
+        db_table = "exam_fun_content"
+        verbose_name = "趣味课堂内容"
+        verbose_name_plural = "趣味课堂内容"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.title
