@@ -10,6 +10,7 @@ from rest_framework.routers import DefaultRouter
 from apps.exam import (
     answer_views,
     certificate_views,
+    practice_views,
     score_views,
     stats_views,
     student_views,
@@ -29,6 +30,8 @@ router.register("certificates", certificate_views.CertificateViewSet, basename="
 router.register("extracurricular", student_views.ExtracurricularViewSet, basename="extracurricular")
 # 保留答题记录的 AI 评分入口
 router.register("answers", views.AnswerViewSet, basename="answer")
+# ---- 学生练习测评 ----
+router.register("practice", practice_views.PracticeViewSet, basename="practice")
 
 urlpatterns = [
     # 判分与评分

@@ -182,26 +182,43 @@ class PaperViewSet(BaseViewSet):
     )
     @action(detail=True, methods=["post"], url_path="draft")
     def draft(self, request, pk=None):
-        """暂存试卷：按传入顺序重建试题关联，并置为草稿。"""
+        """暂存试卷：按传入顺序重建试题关联，并置为草稿。
+
+        兼容两种请求格式：
+        - 新版 questions：逐题指定分值，[{"question_id": 101, "score": 5}]；
+        - 旧版 question_ids：[101, 205]，沿用题目默认分值。
+        两者同时传入时优先使用 questions。
+        """
         paper = self.get_object()
         serializer = DraftRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        question_ids = serializer.validated_data["question_ids"]
+        data = serializer.validated_data
+
+        questions = data.get("questions")
+        if questions:
+            # 新版：逐题分值
+            question_ids = [item["question_id"] for item in questions]
+            score_map = {item["question_id"]: item["score"] for item in questions}
+        else:
+            # 旧版：题目 ID 数组，沿用题目默认分值
+            question_ids = data["question_ids"]
+            score_map = None
 
         if len(set(question_ids)) != len(question_ids):
-            raise ApiException("question_ids 存在重复", code=ErrorCode.INVALID_PARAM, status=400)
+            raise ApiException("题目 ID 存在重复", code=ErrorCode.INVALID_PARAM, status=400)
 
         id_to_question = {q.id: q for q in Question.objects.filter(id__in=question_ids)}
         if len(id_to_question) != len(question_ids):
             raise ApiException("部分试题不存在", code=ErrorCode.INVALID_PARAM, status=400)
         ordered = [id_to_question[qid] for qid in question_ids]
 
-        total_score = sum((q.score for q in ordered), Decimal("0"))
+        scores = [score_map[qid] for qid in question_ids] if score_map is not None else [q.score for q in ordered]
+        total_score = sum(scores, Decimal("0"))
 
         with transaction.atomic():
             paper.paper_questions.all().delete()
             PaperQuestion.objects.bulk_create([
-                PaperQuestion(paper=paper, question=q, sort=i + 1, score=q.score)
+                PaperQuestion(paper=paper, question=q, sort=i + 1, score=scores[i])
                 for i, q in enumerate(ordered)
             ])
             paper.status = Paper.STATUS_DRAFT

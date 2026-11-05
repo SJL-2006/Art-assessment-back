@@ -132,12 +132,30 @@ class AutoGenerateRequestSerializer(serializers.Serializer):
         return value
 
 
-class DraftRequestSerializer(serializers.Serializer):
-    """暂存试卷请求体：按顺序重建试题关联。"""
+class DraftQuestionSerializer(serializers.Serializer):
+    """暂存试卷：单道题的逐题分值（新版 questions 格式）。"""
 
+    question_id = serializers.IntegerField(min_value=1)
+    score = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=Decimal("0"))
+
+
+class DraftRequestSerializer(serializers.Serializer):
+    """暂存试卷请求体：兼容新版逐题分值 questions 与旧版 question_ids。
+
+    新版：{"questions": [{"question_id": 101, "score": 5}]}
+    旧版：{"question_ids": [101, 205]}
+    两者同时传入时，优先使用 questions。
+    """
+
+    questions = DraftQuestionSerializer(many=True, required=False)
     question_ids = serializers.ListField(
-        child=serializers.IntegerField(min_value=1), allow_empty=False,
+        child=serializers.IntegerField(min_value=1), required=False,
     )
+
+    def validate(self, attrs):
+        if not attrs.get("questions") and not attrs.get("question_ids"):
+            raise serializers.ValidationError("至少需要 questions 或 question_ids")
+        return attrs
 
 
 class PublishCreateSerializer(serializers.Serializer):
