@@ -5,19 +5,30 @@
 16. GET  /api/exam/my-growth/          个人成长曲线（音乐 / 美术）
 17. POST /api/exam/extracurricular/    上传课外自主学习图片
 """
+from datetime import datetime
+
 from django.db.models import Q
-from rest_framework import viewsets
+from django.utils import timezone
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 
-from apps.classroom.models import ClassRoom
+from apps.classroom.models import APPROVED, ClassRoom, ClassStudent, ClassTeacher
 from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
 from apps.common.response import ApiResponse, ErrorCode
 from apps.exam import services
-from apps.exam.models import AnswerSheet, ExtracurricularUpload, PerformanceScore
-from apps.exam.serializers import ExtracurricularUploadSerializer
+from apps.exam.models import (
+    AnswerSheet,
+    ExtracurricularUpload,
+    PerformanceScore,
+    UploadedCertificate,
+)
+from apps.exam.serializers import ExtracurricularUploadSerializer, UploadedCertificateSerializer
 from apps.users.models import User
+
+CERT_ALLOWED_TYPES = {"image/jpeg", "image/png"}
+CERT_MAX_SIZE = 5 * 1024 * 1024
 
 SUBJECT_LABELS = {"music": "音乐", "art": "美术"}
 
@@ -288,3 +299,149 @@ class MyClassAssessmentView(APIView):
             "by_subject": by_subject_list,
             "total": len(items),
         })
+
+
+def _teacher_class_ids(teacher):
+    """教师所带班级：已通过审核的科任班级 + 班主任班级。"""
+    ids = set(
+        ClassTeacher.objects.filter(
+            teacher=teacher, status=APPROVED, is_deleted=False,
+        ).values_list("klass_id", flat=True)
+    )
+    ids |= set(
+        ClassRoom.objects.filter(head_teacher=teacher, is_deleted=False).values_list("id", flat=True)
+    )
+    return ids
+
+
+def _teacher_student_ids(teacher):
+    """教师可审核的学生：所带班级中已通过审核的学生。"""
+    class_ids = _teacher_class_ids(teacher)
+    if not class_ids:
+        return []
+    return list(
+        ClassStudent.objects.filter(
+            klass_id__in=class_ids, status=APPROVED, is_deleted=False,
+        ).values_list("student_id", flat=True)
+    )
+
+
+class UploadedCertificateViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """学生上传证书：上传 / 我的列表 / 删除（学生），审核（教师）。"""
+
+    queryset = UploadedCertificate.objects.all()
+    serializer_class = UploadedCertificateSerializer
+
+    def get_permissions(self):
+        if self.action in ("list", "create", "destroy"):
+            return [has_role(User.ROLE_STUDENT)()]
+        return [has_role(User.ROLE_TEACHER)()]
+
+    def get_queryset(self):
+        qs = UploadedCertificate.objects.filter(is_deleted=False).select_related(
+            "student", "reviewer"
+        )
+        user = self.request.user
+        if user.role == User.ROLE_STUDENT:
+            qs = qs.filter(student=user)
+        elif user.role == User.ROLE_TEACHER:
+            qs = qs.filter(student_id__in=_teacher_student_ids(user))
+        return qs
+
+    def _serialize(self, records):
+        return UploadedCertificateSerializer(
+            records, many=True, context={"request": self.request}
+        ).data
+
+    def list(self, request, *args, **kwargs):
+        """我的上传证书列表（仅本人）。"""
+        qs = self.get_queryset().order_by("-created_at")
+        status = request.query_params.get("status")
+        if status:
+            qs = qs.filter(status=status)
+        return ApiResponse(data={"list": self._serialize(qs), "total": qs.count()})
+
+    def create(self, request, *args, **kwargs):
+        """上传证书（multipart/form-data，图片字段名 image）。"""
+        image = request.FILES.get("image")
+        if image is None:
+            raise ApiException("请上传证书图片（字段名 image）", ErrorCode.INVALID_PARAM, 400)
+
+        title = (request.data.get("title") or "").strip()
+        if not title:
+            raise ApiException("证书标题不能为空", ErrorCode.INVALID_PARAM, 400)
+
+        if image.size > CERT_MAX_SIZE:
+            raise ApiException("证书图片不能超过 5MB", ErrorCode.INVALID_PARAM, 400)
+
+        content_type = (getattr(image, "content_type", "") or "").lower()
+        if content_type not in CERT_ALLOWED_TYPES:
+            raise ApiException("仅支持 JPG / PNG 格式的图片", ErrorCode.INVALID_PARAM, 400)
+
+        obtained_at = None
+        raw_date = (request.data.get("obtained_at") or "").strip()
+        if raw_date:
+            try:
+                obtained_at = datetime.strptime(raw_date, "%Y-%m-%d").date()
+            except ValueError:
+                raise ApiException(
+                    "获得日期格式应为 YYYY-MM-DD", ErrorCode.INVALID_PARAM, 400,
+                )
+
+        cert_type = request.data.get("cert_type") or UploadedCertificate.CERT_OTHER
+        if cert_type not in dict(UploadedCertificate.CERT_TYPE_CHOICES):
+            cert_type = UploadedCertificate.CERT_OTHER
+        subject = request.data.get("subject") or UploadedCertificate.SUBJECT_OTHER
+        if subject not in dict(UploadedCertificate.SUBJECT_CHOICES):
+            subject = UploadedCertificate.SUBJECT_OTHER
+
+        record = UploadedCertificate.objects.create(
+            student=request.user,
+            title=title[:128],
+            cert_type=cert_type,
+            subject=subject,
+            issuer=(request.data.get("issuer") or "")[:128],
+            obtained_at=obtained_at,
+            image=image,
+            note=request.data.get("note") or "",
+        )
+        data = UploadedCertificateSerializer(record, context={"request": request}).data
+        return ApiResponse(data=data, message="上传成功", status=201)
+
+    def destroy(self, request, *args, **kwargs):
+        """软删除本人证书。"""
+        record = self.get_object()
+        record.is_deleted = True
+        record.deleted_at = timezone.now()
+        record.save(update_fields=["is_deleted", "deleted_at", "updated_at"])
+        return ApiResponse(None, message="删除成功")
+
+    @action(detail=False, methods=["get"], url_path="review")
+    def review_list(self, request):
+        """教师：待审核列表（仅本人所带班级学生）。"""
+        qs = self.get_queryset().order_by("-created_at")
+        status = request.query_params.get("status")
+        if status:
+            qs = qs.filter(status=status)
+        return ApiResponse(data={"list": self._serialize(qs), "total": qs.count()})
+
+    @action(detail=True, methods=["post"], url_path="review")
+    def review(self, request, pk=None):
+        """教师审核：非本人班级记录由 get_object 返回 404。"""
+        record = self.get_object()
+        approved = request.data.get("approved")
+        passed = approved in (True, 1, "1", "true", "True")
+        record.status = (
+            UploadedCertificate.STATUS_APPROVED if passed else UploadedCertificate.STATUS_REJECTED
+        )
+        record.reviewer = request.user
+        record.review_comment = request.data.get("comment") or ""
+        record.reviewed_at = timezone.now()
+        record.save(update_fields=["status", "reviewer", "review_comment", "reviewed_at", "updated_at"])
+        data = UploadedCertificateSerializer(record, context={"request": request}).data
+        return ApiResponse(data=data, message="审核通过" if passed else "已驳回")

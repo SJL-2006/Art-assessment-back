@@ -12,7 +12,9 @@ from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import quote
 
 from django.db import transaction
+from django.db.models import Q
 from django.http import StreamingHttpResponse
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action
 
@@ -20,13 +22,15 @@ from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
 from apps.common.response import ApiResponse, ErrorCode
 from apps.common.views import BaseViewSet
-from apps.exam.models import Answer, Paper, PaperPublish, PaperQuestion
+from apps.exam import services
+from apps.exam.models import Answer, FunContent, Paper, PaperPublish, PaperQuestion
 from apps.exam.serializers import (
     AnswerSerializer,
     AnswerSheetSerializer,
     AutoGenerateRequestSerializer,
     CertificateSerializer,
     DraftRequestSerializer,
+    FunContentSerializer,
     PaperDetailSerializer,
     PaperPublishSerializer,
     PaperQuestionSerializer,
@@ -454,3 +458,79 @@ class AnswerViewSet(BaseViewSet):
             "results": results,
             "total": len(results),
         })
+
+
+class FunContentViewSet(BaseViewSet):
+    """趣味课堂：省级发布管理，学生按发布范围可见。"""
+
+    queryset = FunContent.objects.all()
+    serializer_class = FunContentSerializer
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [has_role(User.ROLE_STUDENT, User.ROLE_PROVINCE)()]
+        return [has_role(User.ROLE_PROVINCE)()]
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related("creator", "school", "target_class")
+        user = self.request.user
+        if user.role == User.ROLE_STUDENT:
+            # 越权保护：仅已发布，且学校/班级匹配本人
+            class_ids = services.student_class_ids(user)
+            qs = qs.filter(
+                Q(school__isnull=True) | Q(school_id=user.school_id),
+                Q(target_class__isnull=True) | Q(target_class_id__in=class_ids),
+                status=FunContent.STATUS_PUBLISHED,
+            )
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        """列表：支持 subject / status / category / keyword 筛选并分页。"""
+        qs = self.get_queryset()
+        params = request.query_params
+
+        subject = params.get("subject")
+        if subject:
+            qs = qs.filter(subject=subject)
+        # 学生只能看已发布内容，忽略 status 参数
+        status = params.get("status")
+        if status and request.user.role != User.ROLE_STUDENT:
+            qs = qs.filter(status=status)
+        category = params.get("category")
+        if category:
+            qs = qs.filter(category=category)
+        keyword = (params.get("keyword") or "").strip()
+        if keyword:
+            qs = qs.filter(Q(title__icontains=keyword) | Q(summary__icontains=keyword))
+
+        qs = qs.order_by("-published_at", "-created_at")
+        page = self.paginate_queryset(qs)
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
+
+    def perform_create(self, serializer):
+        """creator / school 由后端注入，省级发布不绑定学校。"""
+        user = self.request.user
+        extra = {"creator": user, "school": user.school if user.school_id else None}
+        # 创建即发布时补齐发布时间
+        if serializer.validated_data.get("status") == FunContent.STATUS_PUBLISHED:
+            extra["published_at"] = timezone.now()
+        serializer.save(**extra)
+
+    @action(detail=True, methods=["post"])
+    def publish(self, request, pk=None):
+        """发布：学生端可见。"""
+        content = self.get_object()
+        content.status = FunContent.STATUS_PUBLISHED
+        content.published_at = timezone.now()
+        content.save(update_fields=["status", "published_at", "updated_at"])
+        return ApiResponse(self.get_serializer(content).data, message="发布成功")
+
+    @action(detail=True, methods=["post"])
+    def recall(self, request, pk=None):
+        """撤回：学生端不可见。"""
+        content = self.get_object()
+        content.status = FunContent.STATUS_DRAFT
+        content.published_at = None
+        content.save(update_fields=["status", "published_at", "updated_at"])
+        return ApiResponse(self.get_serializer(content).data, message="已撤回")

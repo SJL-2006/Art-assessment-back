@@ -40,12 +40,6 @@ router.register("practice", practice_views.PracticeViewSet, basename="practice")
 
 # ---- 补丁路由：B/C 视图类就绪后自动注册，未就绪时跳过不阻塞启动 ----
 try:
-    from apps.exam import practice_views  # B 负责
-    router.register("practice", practice_views.PracticeViewSet, basename="practice")
-except (ImportError, AttributeError):
-    log.warning("exam.practice_views.PracticeViewSet 尚未实现，practice 路由未注册")
-
-try:
     router.register("fun-contents", views.FunContentViewSet, basename="fun_content")
 except AttributeError:
     log.warning("exam.views.FunContentViewSet 尚未实现，fun-contents 路由未注册")
