@@ -1,8 +1,38 @@
 """User 相关序列化器。"""
+from django.contrib.auth.models import update_last_login
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
+from rest_framework import exceptions as drf_exc
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.settings import api_settings
 
 from apps.users.models import User
+
+
+class LoginSerializer(TokenObtainPairSerializer):
+    """登录：username 字段兼容 用户名 / 学号(student_no) / 职工编号(staff_no)。"""
+
+    def validate(self, attrs):
+        identifier = attrs.get(self.username_field)
+        password = attrs.get("password")
+        if not identifier or not password:
+            raise drf_exc.ValidationError("用户名/编号与密码不能为空")
+
+        user = User.objects.filter(
+            Q(username=identifier) | Q(student_no=identifier) | Q(staff_no=identifier)
+        ).first()
+        if user is None or not user.check_password(password):
+            raise drf_exc.AuthenticationFailed("用户名或密码错误")
+        if not user.is_active:
+            raise drf_exc.AuthenticationFailed("账号已停用")
+
+        self.user = user
+        refresh = self.get_token(user)
+        data = {"refresh": str(refresh), "access": str(refresh.access_token)}
+        if api_settings.UPDATE_LAST_LOGIN:
+            update_last_login(None, user)
+        return data
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -13,7 +43,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id", "username", "real_name", "phone", "avatar", "role", "role_display",
-            "student_no", "school", "region", "email", "date_joined",
+            "student_no", "staff_no", "school", "region", "email", "date_joined",
         ]
         read_only_fields = ["id", "username", "role", "date_joined"]
 
@@ -24,7 +54,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["username", "password", "role", "real_name", "phone", "student_no", "school", "region"]
+        fields = ["username", "password", "role", "real_name", "phone", "student_no", "staff_no", "school", "region"]
 
     def create(self, validated_data):
         password = validated_data.pop("password")
@@ -46,7 +76,7 @@ class AccountManageSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id", "username", "password", "real_name", "phone", "avatar",
-            "role", "student_no", "school", "region", "email", "is_active", "date_joined",
+            "role", "student_no", "staff_no", "school", "region", "email", "is_active", "date_joined",
         ]
         read_only_fields = ["id", "date_joined"]
         extra_kwargs = {"password": {"write_only": True, "required": False}}

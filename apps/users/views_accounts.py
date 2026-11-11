@@ -115,15 +115,16 @@ class AccountViewSet(BaseViewSet):
         for i in range(1, count + 1):
             username = f"{prefix}{i:03d}"
             real_name = real_names[i - 1] if i - 1 < len(real_names) else ""
-            user, new = User.objects.get_or_create(
-                username=username,
-                defaults={
-                    "role": role,
-                    "school": school,
-                    "region": region,
-                    "real_name": real_name,
-                },
-            )
+            defaults = {
+                "role": role,
+                "school": school,
+                "region": region,
+                "real_name": real_name,
+            }
+            # 教职工账号：生成的 username 同时作为职工编号（学生不设）
+            if role != User.ROLE_STUDENT:
+                defaults["staff_no"] = username
+            user, new = User.objects.get_or_create(username=username, defaults=defaults)
             if new:
                 user.set_password(default_pwd)
                 user.save()
@@ -162,6 +163,7 @@ class AccountViewSet(BaseViewSet):
                 real_name=item.get("real_name", ""),
                 phone=item.get("phone", ""),
                 student_no=item.get("student_no", ""),
+                staff_no=item.get("staff_no", ""),
                 school_id=item.get("school"),
                 region_id=item.get("region"),
             )
