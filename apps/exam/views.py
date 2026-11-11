@@ -12,7 +12,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import quote
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import StreamingHttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiTypes, extend_schema
@@ -82,11 +82,21 @@ class PaperViewSet(BaseViewSet):
 
     @staticmethod
     def _resolve_course(subject):
-        """把 Paper.subject（music/art）映射到 questionbank.Course。"""
-        course = Course.objects.filter(code=subject).first()
-        if course is None:
-            name = SUBJECT_TO_COURSE_NAME.get(subject)
-            course = Course.objects.filter(name=name).first() if name else None
+        """把 Paper.subject（music/art）映射到 questionbank.Course。
+
+        题库中同一学科可能有多条课程记录（如 code 均为 music 的「音乐鉴赏」「音乐」），
+        因此优先按中文名精确匹配，其次退回 code 匹配，并取题量最多的一条，
+        避免抽到只有零星题目的同 code 课程。
+        """
+        name = SUBJECT_TO_COURSE_NAME.get(subject)
+        candidates = Course.objects.none()
+        if name:
+            candidates = Course.objects.filter(name=name, is_deleted=False)
+        if not candidates.exists():
+            candidates = Course.objects.filter(code=subject, is_deleted=False)
+        course = candidates.annotate(_question_count=Count("questions")).order_by(
+            "-_question_count", "id",
+        ).first()
         if course is None:
             raise ApiException(f"未找到学科对应的课程：{subject}", code=ErrorCode.NOT_FOUND, status=404)
         return course
@@ -136,24 +146,78 @@ class PaperViewSet(BaseViewSet):
         if chapter_ids:
             base_qs = base_qs.filter(chapter_id__in=chapter_ids)
 
-        qtype_label_map = dict(Question.TYPE_CHOICES)
-        difficulty_label_map = dict(Question.DIFFICULTY_CHOICES)
+        difficulty_order = [key for key, _ in Question.DIFFICULTY_CHOICES]
+        target = sum(cfg["count"] for cfg in qtype_config)
 
         picked = []
+        picked_ids = set()
+        relaxed = False
+
+        def take(qs, limit):
+            """从 qs 随机取至多 limit 道，并在整卷范围内去重。"""
+            if limit <= 0:
+                return []
+            rows = list(qs.exclude(id__in=picked_ids).order_by("?")[:limit])
+            picked_ids.update(q.id for q in rows)
+            return rows
+
+        # 跨年级候选池：仍限定同学科与已选章节范围
+        cross_grade_qs = Question.objects.filter(
+            course=course, status=Question.STATUS_APPROVED,
+        )
+        if chapter_ids:
+            cross_grade_qs = cross_grade_qs.filter(chapter_id__in=chapter_ids)
+
         for cfg in qtype_config:
             qtype = cfg["qtype"]
             difficulty = cfg["difficulty"]
             count = cfg["count"]
-            qs = base_qs.filter(qtype=qtype, difficulty=difficulty)
-            available = qs.count()
-            if available < count:
-                raise ApiException(
-                    f"{qtype_label_map.get(qtype, qtype)}题型"
-                    f"{difficulty_label_map.get(difficulty, difficulty)}难度仅找到{available}道题",
-                    code=ErrorCode.INVALID_PARAM,
-                    status=400,
-                )
-            picked.extend(qs.order_by("?")[:count])
+
+            # 1) 严格匹配：同年级 + 同题型 + 同难度
+            grade_qs = base_qs.filter(qtype=qtype)
+            selected = take(grade_qs.filter(difficulty=difficulty), count)
+
+            # 2) 同年级内放宽难度，难度最接近的优先
+            if len(selected) < count:
+                offset = difficulty_order.index(difficulty)
+                for other in sorted(
+                    (d for d in difficulty_order if d != difficulty),
+                    key=lambda d: abs(difficulty_order.index(d) - offset),
+                ):
+                    if len(selected) >= count:
+                        break
+                    extra = take(grade_qs.filter(difficulty=other), count - len(selected))
+                    if extra:
+                        relaxed = True
+                        selected.extend(extra)
+
+            # 3) 仍不足时跨年级补足（同题型）
+            if len(selected) < count and grade:
+                extra = take(cross_grade_qs.filter(qtype=qtype), count - len(selected))
+                if extra:
+                    relaxed = True
+                    selected.extend(extra)
+
+            picked.extend(selected)
+
+        # 4) 兜底：同年级任意题型补足，最后再放宽到同学科其他年级
+        if len(picked) < target:
+            extra = take(base_qs, target - len(picked))
+            if extra:
+                relaxed = True
+                picked.extend(extra)
+        if len(picked) < target and grade:
+            extra = take(cross_grade_qs, target - len(picked))
+            if extra:
+                relaxed = True
+                picked.extend(extra)
+
+        if len(picked) < target:
+            raise ApiException(
+                f"题库题量不足：本次组卷需{target}道题，当前题库仅有{len(picked)}道，请先补充题库",
+                code=ErrorCode.INVALID_PARAM,
+                status=400,
+            )
 
         if total_score is None:
             scores = [q.score for q in picked]
@@ -178,7 +242,10 @@ class PaperViewSet(BaseViewSet):
                 for i, q in enumerate(picked)
             ])
 
-        return ApiResponse(PaperDetailSerializer(paper).data, message="自动组卷成功", status=201)
+        message = "自动组卷成功"
+        if relaxed:
+            message = "自动组卷成功，部分题目因题库数量不足已按相近难度或年级补足"
+        return ApiResponse(PaperDetailSerializer(paper).data, message=message, status=201)
 
     @extend_schema(
         request=DraftRequestSerializer,

@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.eggs/
+*.egg-info/
+
+# IDE / 系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地数据库 / 临时
+db.sqlite3
+db.sqlite3-journal
+*.log
+_tmp_*.py
+*.zip
+
+# 依赖 & 缓存
+.venv/
+venv/
+env/
+pip-log.txt
+
+# 静态产物（运行时会 collectstatic）
+staticfiles/
+
+# 媒体文件（运行时挂载 volume）
+media/
+
+# 文档 & 测试（不进镜像）
+docs/
+scripts/test_api.py
+
+# 环境文件（运行时从 docker-compose 注入）
+.env
+.env.local
