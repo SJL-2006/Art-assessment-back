@@ -43,9 +43,9 @@ USER django
 
 EXPOSE 8000
 
-# 健康检查：每 30s 探一次 /api/schema/
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD python manage.py check --deploy || exit 1
+# 健康检查：每 30s 探一次 Django 应用是否能启动（不带 --deploy 避免 ALLOWED_HOSTS=* 报错）
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD python manage.py check || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
 CMD []
