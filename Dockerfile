@@ -23,6 +23,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
         tini \
         ca-certificates \
+        bash \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
