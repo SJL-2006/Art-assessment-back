@@ -65,6 +65,12 @@ class PaperViewSet(BaseViewSet):
     search_fields = ["title"]
     ordering_fields = ["id"]
 
+    def get_serializer_class(self):
+        """详情返回含嵌套题目的 PaperDetailSerializer，列表保持轻量。"""
+        if self.action == "retrieve":
+            return PaperDetailSerializer
+        return PaperSerializer
+
     def get_queryset(self):
         qs = super().get_queryset()
         params = self.request.query_params
