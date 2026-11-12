@@ -1,6 +1,7 @@
 """题库：课程、章节、试题及其嵌套资源与审核接口。"""
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
+from rest_framework.views import APIView
 
 from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
@@ -184,3 +185,14 @@ class QuestionResourceViewSet(BaseViewSet):
         if rtype:
             qs = qs.filter(rtype=rtype)
         return qs
+
+
+class QuestionTypeOptionsView(APIView):
+    """GET /api/questionbank/question-types/ 题型字典（组卷/题库下拉使用，含填空题）。"""
+
+    permission_classes = [has_role(*QUESTION_READ_ROLES)]
+
+    def get(self, request):
+        return ApiResponse(
+            data=[{"value": code, "label": label} for code, label in Question.TYPE_CHOICES]
+        )

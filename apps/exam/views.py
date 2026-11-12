@@ -15,6 +15,9 @@ from django.db import transaction
 from django.http import StreamingHttpResponse
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action
+from rest_framework.views import APIView
+
+from apps.classroom.models import ClassRoom
 
 from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
@@ -52,6 +55,31 @@ SUBJECT_TO_COURSE_NAME = {
     Paper.SUBJECT_ART: "美术",
 }
 
+SUBJECT_ALIASES = {
+    Paper.SUBJECT_MUSIC: Paper.SUBJECT_MUSIC,
+    Paper.SUBJECT_ART: Paper.SUBJECT_ART,
+    "音乐": Paper.SUBJECT_MUSIC,
+    "美术": Paper.SUBJECT_ART,
+}
+
+GRADE_OPTIONS = ("一年级", "二年级", "三年级", "四年级", "五年级", "六年级")
+
+
+def normalize_subject(value):
+    """把前端可能传来的学科代码/中文名/课程 ID 统一为 Paper.subject 代码。"""
+    raw = str(value).strip()
+    if raw in SUBJECT_ALIASES:
+        return SUBJECT_ALIASES[raw]
+    course = Course.objects.filter(id=raw).first() if raw.isdigit() else None
+    if course is None:
+        course = Course.objects.filter(name=raw).first()
+    if course is not None:
+        if course.code in SUBJECT_ALIASES:
+            return SUBJECT_ALIASES[course.code]
+        if course.name in SUBJECT_ALIASES:
+            return SUBJECT_ALIASES[course.name]
+    return raw
+
 
 class PaperViewSet(BaseViewSet):
     """试卷 CRUD，含自动组卷与暂存。"""
@@ -73,6 +101,8 @@ class PaperViewSet(BaseViewSet):
         }.items():
             value = params.get(param)
             if value:
+                if field == "subject":
+                    value = normalize_subject(value)
                 qs = qs.filter(**{field: value})
         return qs
 
@@ -437,3 +467,25 @@ class AnswerViewSet(BaseViewSet):
             "results": results,
             "total": len(results),
         })
+
+
+class GradeOptionsView(APIView):
+    """GET /api/exam/grades/ 年级字典（测评发布等下拉使用）。
+
+    返回标准一至六年级，并补充数据库班级里已使用的自定义年级。
+    """
+
+    permission_classes = [has_role(*PAPER_ROLES)]
+
+    def get(self, request):
+        grades = list(GRADE_OPTIONS)
+        used = (
+            ClassRoom.objects.filter(is_deleted=False)
+            .exclude(grade="")
+            .values_list("grade", flat=True)
+            .distinct()
+        )
+        for grade in used:
+            if grade and grade not in grades:
+                grades.append(grade)
+        return ApiResponse(data=[{"value": grade, "label": grade} for grade in grades])
