@@ -7,6 +7,8 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.settings import api_settings
 
+from apps.common.exceptions import ApiException
+from apps.common.response import ErrorCode
 from apps.users.models import User
 
 
@@ -23,9 +25,9 @@ class LoginSerializer(TokenObtainPairSerializer):
             Q(username=identifier) | Q(student_no=identifier) | Q(staff_no=identifier)
         ).first()
         if user is None or not user.check_password(password):
-            raise drf_exc.AuthenticationFailed("用户名或密码错误")
+            raise ApiException("用户名或密码错误", code=ErrorCode.UNAUTHORIZED, status=401)
         if not user.is_active:
-            raise drf_exc.AuthenticationFailed("账号已停用")
+            raise ApiException("账号已停用", code=ErrorCode.UNAUTHORIZED, status=401)
 
         self.user = user
         refresh = self.get_token(user)
