@@ -50,6 +50,8 @@ except AttributeError:
     log.warning("exam.student_views.UploadedCertificateViewSet 尚未实现，cert-uploads 路由未注册")
 
 urlpatterns = [
+    # 年级字典（测评发布等下拉使用）
+    path("grades/", views.GradeOptionsView.as_view(), name="grade_options"),
     # 判分与评分
     path("scores/template/", score_views.ScoreTemplateView.as_view(), name="score_template"),
     path("scores/import/", score_views.ScoreImportView.as_view(), name="score_import"),

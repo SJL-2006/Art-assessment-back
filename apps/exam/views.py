@@ -17,6 +17,9 @@ from django.http import StreamingHttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action
+from rest_framework.views import APIView
+
+from apps.classroom.models import ClassRoom
 
 from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
@@ -56,6 +59,31 @@ SUBJECT_TO_COURSE_NAME = {
     Paper.SUBJECT_ART: "美术",
 }
 
+SUBJECT_ALIASES = {
+    Paper.SUBJECT_MUSIC: Paper.SUBJECT_MUSIC,
+    Paper.SUBJECT_ART: Paper.SUBJECT_ART,
+    "音乐": Paper.SUBJECT_MUSIC,
+    "美术": Paper.SUBJECT_ART,
+}
+
+GRADE_OPTIONS = ("一年级", "二年级", "三年级", "四年级", "五年级", "六年级")
+
+
+def normalize_subject(value):
+    """把前端可能传来的学科代码/中文名/课程 ID 统一为 Paper.subject 代码。"""
+    raw = str(value).strip()
+    if raw in SUBJECT_ALIASES:
+        return SUBJECT_ALIASES[raw]
+    course = Course.objects.filter(id=raw).first() if raw.isdigit() else None
+    if course is None:
+        course = Course.objects.filter(name=raw).first()
+    if course is not None:
+        if course.code in SUBJECT_ALIASES:
+            return SUBJECT_ALIASES[course.code]
+        if course.name in SUBJECT_ALIASES:
+            return SUBJECT_ALIASES[course.name]
+    return raw
+
 
 class PaperViewSet(BaseViewSet):
     """试卷 CRUD，含自动组卷与暂存。"""
@@ -83,6 +111,8 @@ class PaperViewSet(BaseViewSet):
         }.items():
             value = params.get(param)
             if value:
+                if field == "subject":
+                    value = normalize_subject(value)
                 qs = qs.filter(**{field: value})
         return qs
 
@@ -533,77 +563,36 @@ class AnswerViewSet(BaseViewSet):
         })
 
 
-class FunContentViewSet(BaseViewSet):
-    """趣味课堂：省级发布管理，学生按发布范围可见。"""
+if user.role == User.ROLE_STUDENT:
+    # 越权保护：仅已发布，且学校/班级匹配本人
+    class_ids = services.student_class_ids(user)
+    qs = qs.filter(
+        Q(school_isnull=True) | Q(school_id=user.school_id),
+        Q(target_class_isnull=True) | Q(target_class_id__in=class_ids),
+        status=FunContent.STATUS_PUBLISHED,
+    )
+return qs
 
-    queryset = FunContent.objects.all()
-    serializer_class = FunContentSerializer
+def list(self, request, *args, **kwargs):
+    """列表：支持 subject / status / category / keyword 筛选并分页。"""
+    qs = self.get_queryset()
+    params = request.query_params
 
-    def get_permissions(self):
-        if self.action in ("list", "retrieve"):
-            return [has_role(User.ROLE_STUDENT, User.ROLE_PROVINCE)()]
-        return [has_role(User.ROLE_PROVINCE)()]
+    subject = params.get("subject")
+    if subject:
+        qs = qs.filter(subject=subject)
+    # 学生只能看已发布内容，忽略 status 参数
+    status = params.get("status")
+    if status and request.user.role != User.ROLE_STUDENT:
+        qs = qs.filter(status=status)
+    category = params.get("category")
+    if category:
+        qs = qs.filter(category=category)
+    keyword = (params.get("keyword") or "").strip()
+    if keyword:
+        qs = qs.filter(Q(title__icontains=keyword) | Q(summary__icontains=keyword))
 
-    def get_queryset(self):
-        qs = super().get_queryset().select_related("creator", "school", "target_class")
-        user = self.request.user
-        if user.role == User.ROLE_STUDENT:
-            # 越权保护：仅已发布，且学校/班级匹配本人
-            class_ids = services.student_class_ids(user)
-            qs = qs.filter(
-                Q(school__isnull=True) | Q(school_id=user.school_id),
-                Q(target_class__isnull=True) | Q(target_class_id__in=class_ids),
-                status=FunContent.STATUS_PUBLISHED,
-            )
-        return qs
-
-    def list(self, request, *args, **kwargs):
-        """列表：支持 subject / status / category / keyword 筛选并分页。"""
-        qs = self.get_queryset()
-        params = request.query_params
-
-        subject = params.get("subject")
-        if subject:
-            qs = qs.filter(subject=subject)
-        # 学生只能看已发布内容，忽略 status 参数
-        status = params.get("status")
-        if status and request.user.role != User.ROLE_STUDENT:
-            qs = qs.filter(status=status)
-        category = params.get("category")
-        if category:
-            qs = qs.filter(category=category)
-        keyword = (params.get("keyword") or "").strip()
-        if keyword:
-            qs = qs.filter(Q(title__icontains=keyword) | Q(summary__icontains=keyword))
-
-        qs = qs.order_by("-published_at", "-created_at")
-        page = self.paginate_queryset(qs)
-        serializer = self.get_serializer(page, many=True)
-        return self.get_paginated_response(serializer.data)
-
-    def perform_create(self, serializer):
-        """creator / school 由后端注入，省级发布不绑定学校。"""
-        user = self.request.user
-        extra = {"creator": user, "school": user.school if user.school_id else None}
-        # 创建即发布时补齐发布时间
-        if serializer.validated_data.get("status") == FunContent.STATUS_PUBLISHED:
-            extra["published_at"] = timezone.now()
-        serializer.save(**extra)
-
-    @action(detail=True, methods=["post"])
-    def publish(self, request, pk=None):
-        """发布：学生端可见。"""
-        content = self.get_object()
-        content.status = FunContent.STATUS_PUBLISHED
-        content.published_at = timezone.now()
-        content.save(update_fields=["status", "published_at", "updated_at"])
-        return ApiResponse(self.get_serializer(content).data, message="发布成功")
-
-    @action(detail=True, methods=["post"])
-    def recall(self, request, pk=None):
-        """撤回：学生端不可见。"""
-        content = self.get_object()
-        content.status = FunContent.STATUS_DRAFT
-        content.published_at = None
-        content.save(update_fields=["status", "published_at", "updated_at"])
-        return ApiResponse(self.get_serializer(content).data, message="已撤回")
+    qs = qs.order_by("-published_at", "-created_at")
+    page = self.paginate_queryset(qs)
+    serializer = self.get_serializer(page, many=True)
+    return self.get_paginated_response(serializer.data)
