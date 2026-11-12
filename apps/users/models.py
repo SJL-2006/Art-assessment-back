@@ -29,6 +29,7 @@ class User(AbstractUser):
     phone = models.CharField("手机号", max_length=20, blank=True)
     avatar = models.FileField("头像", upload_to="avatars/", blank=True)
     student_no = models.CharField("学籍号", max_length=64, blank=True)
+    staff_no = models.CharField("职工编号", max_length=64, blank=True)
     bio = models.TextField("简介", blank=True)
 
     school = models.ForeignKey(

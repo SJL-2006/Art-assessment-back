@@ -13,6 +13,7 @@ from rest_framework.routers import DefaultRouter
 from apps.exam import (
     answer_views,
     certificate_views,
+    practice_views,
     score_views,
     stats_views,
     student_views,
@@ -34,14 +35,10 @@ router.register("certificates", certificate_views.CertificateViewSet, basename="
 router.register("extracurricular", student_views.ExtracurricularViewSet, basename="extracurricular")
 # 保留答题记录的 AI 评分入口
 router.register("answers", views.AnswerViewSet, basename="answer")
+# ---- 学生练习测评 ----
+router.register("practice", practice_views.PracticeViewSet, basename="practice")
 
 # ---- 补丁路由：B/C 视图类就绪后自动注册，未就绪时跳过不阻塞启动 ----
-try:
-    from apps.exam import practice_views  # B 负责
-    router.register("practice", practice_views.PracticeViewSet, basename="practice")
-except (ImportError, AttributeError):
-    log.warning("exam.practice_views.PracticeViewSet 尚未实现，practice 路由未注册")
-
 try:
     router.register("fun-contents", views.FunContentViewSet, basename="fun_content")
 except AttributeError:

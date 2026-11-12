@@ -3,10 +3,17 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.common.exceptions import ApiException
 from apps.common.response import ApiResponse
-from apps.users.serializers import ChangePasswordSerializer, RegisterSerializer, UserSerializer
+from apps.users.serializers import ChangePasswordSerializer, LoginSerializer, RegisterSerializer, UserSerializer
+
+
+class LoginView(TokenObtainPairView):
+    """#1 登录：username 字段兼容 用户名 / 学号 / 职工编号。"""
+
+    serializer_class = LoginSerializer
 
 
 class RegisterView(generics.CreateAPIView):

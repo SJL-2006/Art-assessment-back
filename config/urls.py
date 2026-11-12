@@ -7,9 +7,10 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.common.views_logs import LogViewSet
+from apps.users.views import LoginView
 from apps.users.views_accounts import AccountViewSet
 
 # ---------- 账号管理（role 参数化 User 资源） ----------
@@ -30,7 +31,7 @@ urlpatterns = [
         "<p>Django Admin：<a href='/admin/'>/admin/</a></p>"
     )),
     # 认证
-    path("api/auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/auth/login/", LoginView.as_view(), name="token_obtain_pair"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     # OpenAPI / Swagger
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

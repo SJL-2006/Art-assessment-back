@@ -7,12 +7,14 @@ from apps.exam.models import (
     AnswerSheet,
     Certificate,
     ExtracurricularUpload,
+    FunContent,
     Paper,
     PaperPublish,
     PaperQuestion,
     PerformanceScore,
+    UploadedCertificate,
 )
-from apps.classroom.models import ClassRoom
+from apps.classroom.models import APPROVED, ClassRoom, ClassStudent
 from apps.exam.models import Answer, AnswerSheet, Certificate, Paper, PaperPublish, PaperQuestion
 from apps.org.models import Region, School
 from apps.questionbank.models import Question
@@ -132,12 +134,30 @@ class AutoGenerateRequestSerializer(serializers.Serializer):
         return value
 
 
-class DraftRequestSerializer(serializers.Serializer):
-    """暂存试卷请求体：按顺序重建试题关联。"""
+class DraftQuestionSerializer(serializers.Serializer):
+    """暂存试卷：单道题的逐题分值（新版 questions 格式）。"""
 
+    question_id = serializers.IntegerField(min_value=1)
+    score = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=Decimal("0"))
+
+
+class DraftRequestSerializer(serializers.Serializer):
+    """暂存试卷请求体：兼容新版逐题分值 questions 与旧版 question_ids。
+
+    新版：{"questions": [{"question_id": 101, "score": 5}]}
+    旧版：{"question_ids": [101, 205]}
+    两者同时传入时，优先使用 questions。
+    """
+
+    questions = DraftQuestionSerializer(many=True, required=False)
     question_ids = serializers.ListField(
-        child=serializers.IntegerField(min_value=1), allow_empty=False,
+        child=serializers.IntegerField(min_value=1), required=False,
     )
+
+    def validate(self, attrs):
+        if not attrs.get("questions") and not attrs.get("question_ids"):
+            raise serializers.ValidationError("至少需要 questions 或 question_ids")
+        return attrs
 
 
 class PublishCreateSerializer(serializers.Serializer):
@@ -177,3 +197,114 @@ class PublishCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError({"target_region": "scope_type=region 时 target_region 必填"})
         # scope_type=grade：无必填 target，grade 可选
         return attrs
+
+
+class FunContentSerializer(serializers.ModelSerializer):
+    """趣味课堂内容（含展示字段）。"""
+
+    subject_display = serializers.CharField(source="get_subject_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    creator_name = serializers.SerializerMethodField()
+    school_name = serializers.SerializerMethodField()
+    target_class_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FunContent
+        fields = [
+            "id",
+            "title",
+            "subject",
+            "subject_display",
+            "category",
+            "summary",
+            "content",
+            "fun_fact",
+            "emoji",
+            "color",
+            "read_minutes",
+            "status",
+            "status_display",
+            "creator",
+            "creator_name",
+            "school",
+            "school_name",
+            "target_class",
+            "target_class_name",
+            "published_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["creator", "school", "published_at", "created_at", "updated_at"]
+
+    def get_creator_name(self, obj):
+        if not obj.creator:
+            return ""
+        return obj.creator.real_name or obj.creator.username
+
+    def get_school_name(self, obj):
+        return obj.school.name if obj.school else ""
+
+    def get_target_class_name(self, obj):
+        return obj.target_class.name if obj.target_class else ""
+
+
+class UploadedCertificateSerializer(serializers.ModelSerializer):
+    """学生上传证书（含展示字段）。"""
+
+    cert_type_display = serializers.CharField(source="get_cert_type_display", read_only=True)
+    subject_display = serializers.CharField(source="get_subject_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    student_name = serializers.SerializerMethodField()
+    class_name = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UploadedCertificate
+        fields = [
+            "id",
+            "title",
+            "cert_type",
+            "cert_type_display",
+            "subject",
+            "subject_display",
+            "issuer",
+            "obtained_at",
+            "image",
+            "image_url",
+            "note",
+            "status",
+            "status_display",
+            "student",
+            "student_name",
+            "class_name",
+            "reviewer",
+            "review_comment",
+            "reviewed_at",
+            "created_at",
+        ]
+        read_only_fields = [
+            "student",
+            "status",
+            "reviewer",
+            "review_comment",
+            "reviewed_at",
+            "created_at",
+        ]
+
+    def get_student_name(self, obj):
+        return obj.student.real_name or obj.student.username
+
+    def get_class_name(self, obj):
+        row = (
+            ClassStudent.objects.filter(student=obj.student, status=APPROVED, is_deleted=False)
+            .select_related("klass")
+            .first()
+        )
+        return row.klass.name if row and row.klass else ""
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return ""
+        url = obj.image.url
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url

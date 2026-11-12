@@ -12,7 +12,9 @@ from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import quote
 
 from django.db import transaction
+from django.db.models import Count, Q
 from django.http import StreamingHttpResponse
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework.decorators import action
 from rest_framework.views import APIView
@@ -23,13 +25,15 @@ from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
 from apps.common.response import ApiResponse, ErrorCode
 from apps.common.views import BaseViewSet
-from apps.exam.models import Answer, Paper, PaperPublish, PaperQuestion
+from apps.exam import services
+from apps.exam.models import Answer, FunContent, Paper, PaperPublish, PaperQuestion
 from apps.exam.serializers import (
     AnswerSerializer,
     AnswerSheetSerializer,
     AutoGenerateRequestSerializer,
     CertificateSerializer,
     DraftRequestSerializer,
+    FunContentSerializer,
     PaperDetailSerializer,
     PaperPublishSerializer,
     PaperQuestionSerializer,
@@ -89,6 +93,12 @@ class PaperViewSet(BaseViewSet):
     search_fields = ["title"]
     ordering_fields = ["id"]
 
+    def get_serializer_class(self):
+        """详情返回含嵌套题目的 PaperDetailSerializer，列表保持轻量。"""
+        if self.action == "retrieve":
+            return PaperDetailSerializer
+        return PaperSerializer
+
     def get_queryset(self):
         qs = super().get_queryset()
         params = self.request.query_params
@@ -108,11 +118,21 @@ class PaperViewSet(BaseViewSet):
 
     @staticmethod
     def _resolve_course(subject):
-        """把 Paper.subject（music/art）映射到 questionbank.Course。"""
-        course = Course.objects.filter(code=subject).first()
-        if course is None:
-            name = SUBJECT_TO_COURSE_NAME.get(subject)
-            course = Course.objects.filter(name=name).first() if name else None
+        """把 Paper.subject（music/art）映射到 questionbank.Course。
+
+        题库中同一学科可能有多条课程记录（如 code 均为 music 的「音乐鉴赏」「音乐」），
+        因此优先按中文名精确匹配，其次退回 code 匹配，并取题量最多的一条，
+        避免抽到只有零星题目的同 code 课程。
+        """
+        name = SUBJECT_TO_COURSE_NAME.get(subject)
+        candidates = Course.objects.none()
+        if name:
+            candidates = Course.objects.filter(name=name, is_deleted=False)
+        if not candidates.exists():
+            candidates = Course.objects.filter(code=subject, is_deleted=False)
+        course = candidates.annotate(_question_count=Count("questions")).order_by(
+            "-_question_count", "id",
+        ).first()
         if course is None:
             raise ApiException(f"未找到学科对应的课程：{subject}", code=ErrorCode.NOT_FOUND, status=404)
         return course
@@ -162,24 +182,78 @@ class PaperViewSet(BaseViewSet):
         if chapter_ids:
             base_qs = base_qs.filter(chapter_id__in=chapter_ids)
 
-        qtype_label_map = dict(Question.TYPE_CHOICES)
-        difficulty_label_map = dict(Question.DIFFICULTY_CHOICES)
+        difficulty_order = [key for key, _ in Question.DIFFICULTY_CHOICES]
+        target = sum(cfg["count"] for cfg in qtype_config)
 
         picked = []
+        picked_ids = set()
+        relaxed = False
+
+        def take(qs, limit):
+            """从 qs 随机取至多 limit 道，并在整卷范围内去重。"""
+            if limit <= 0:
+                return []
+            rows = list(qs.exclude(id__in=picked_ids).order_by("?")[:limit])
+            picked_ids.update(q.id for q in rows)
+            return rows
+
+        # 跨年级候选池：仍限定同学科与已选章节范围
+        cross_grade_qs = Question.objects.filter(
+            course=course, status=Question.STATUS_APPROVED,
+        )
+        if chapter_ids:
+            cross_grade_qs = cross_grade_qs.filter(chapter_id__in=chapter_ids)
+
         for cfg in qtype_config:
             qtype = cfg["qtype"]
             difficulty = cfg["difficulty"]
             count = cfg["count"]
-            qs = base_qs.filter(qtype=qtype, difficulty=difficulty)
-            available = qs.count()
-            if available < count:
-                raise ApiException(
-                    f"{qtype_label_map.get(qtype, qtype)}题型"
-                    f"{difficulty_label_map.get(difficulty, difficulty)}难度仅找到{available}道题",
-                    code=ErrorCode.INVALID_PARAM,
-                    status=400,
-                )
-            picked.extend(qs.order_by("?")[:count])
+
+            # 1) 严格匹配：同年级 + 同题型 + 同难度
+            grade_qs = base_qs.filter(qtype=qtype)
+            selected = take(grade_qs.filter(difficulty=difficulty), count)
+
+            # 2) 同年级内放宽难度，难度最接近的优先
+            if len(selected) < count:
+                offset = difficulty_order.index(difficulty)
+                for other in sorted(
+                    (d for d in difficulty_order if d != difficulty),
+                    key=lambda d: abs(difficulty_order.index(d) - offset),
+                ):
+                    if len(selected) >= count:
+                        break
+                    extra = take(grade_qs.filter(difficulty=other), count - len(selected))
+                    if extra:
+                        relaxed = True
+                        selected.extend(extra)
+
+            # 3) 仍不足时跨年级补足（同题型）
+            if len(selected) < count and grade:
+                extra = take(cross_grade_qs.filter(qtype=qtype), count - len(selected))
+                if extra:
+                    relaxed = True
+                    selected.extend(extra)
+
+            picked.extend(selected)
+
+        # 4) 兜底：同年级任意题型补足，最后再放宽到同学科其他年级
+        if len(picked) < target:
+            extra = take(base_qs, target - len(picked))
+            if extra:
+                relaxed = True
+                picked.extend(extra)
+        if len(picked) < target and grade:
+            extra = take(cross_grade_qs, target - len(picked))
+            if extra:
+                relaxed = True
+                picked.extend(extra)
+
+        if len(picked) < target:
+            raise ApiException(
+                f"题库题量不足：本次组卷需{target}道题，当前题库仅有{len(picked)}道，请先补充题库",
+                code=ErrorCode.INVALID_PARAM,
+                status=400,
+            )
 
         if total_score is None:
             scores = [q.score for q in picked]
@@ -204,7 +278,10 @@ class PaperViewSet(BaseViewSet):
                 for i, q in enumerate(picked)
             ])
 
-        return ApiResponse(PaperDetailSerializer(paper).data, message="自动组卷成功", status=201)
+        message = "自动组卷成功"
+        if relaxed:
+            message = "自动组卷成功，部分题目因题库数量不足已按相近难度或年级补足"
+        return ApiResponse(PaperDetailSerializer(paper).data, message=message, status=201)
 
     @extend_schema(
         request=DraftRequestSerializer,
@@ -212,26 +289,43 @@ class PaperViewSet(BaseViewSet):
     )
     @action(detail=True, methods=["post"], url_path="draft")
     def draft(self, request, pk=None):
-        """暂存试卷：按传入顺序重建试题关联，并置为草稿。"""
+        """暂存试卷：按传入顺序重建试题关联，并置为草稿。
+
+        兼容两种请求格式：
+        - 新版 questions：逐题指定分值，[{"question_id": 101, "score": 5}]；
+        - 旧版 question_ids：[101, 205]，沿用题目默认分值。
+        两者同时传入时优先使用 questions。
+        """
         paper = self.get_object()
         serializer = DraftRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        question_ids = serializer.validated_data["question_ids"]
+        data = serializer.validated_data
+
+        questions = data.get("questions")
+        if questions:
+            # 新版：逐题分值
+            question_ids = [item["question_id"] for item in questions]
+            score_map = {item["question_id"]: item["score"] for item in questions}
+        else:
+            # 旧版：题目 ID 数组，沿用题目默认分值
+            question_ids = data["question_ids"]
+            score_map = None
 
         if len(set(question_ids)) != len(question_ids):
-            raise ApiException("question_ids 存在重复", code=ErrorCode.INVALID_PARAM, status=400)
+            raise ApiException("题目 ID 存在重复", code=ErrorCode.INVALID_PARAM, status=400)
 
         id_to_question = {q.id: q for q in Question.objects.filter(id__in=question_ids)}
         if len(id_to_question) != len(question_ids):
             raise ApiException("部分试题不存在", code=ErrorCode.INVALID_PARAM, status=400)
         ordered = [id_to_question[qid] for qid in question_ids]
 
-        total_score = sum((q.score for q in ordered), Decimal("0"))
+        scores = [score_map[qid] for qid in question_ids] if score_map is not None else [q.score for q in ordered]
+        total_score = sum(scores, Decimal("0"))
 
         with transaction.atomic():
             paper.paper_questions.all().delete()
             PaperQuestion.objects.bulk_create([
-                PaperQuestion(paper=paper, question=q, sort=i + 1, score=q.score)
+                PaperQuestion(paper=paper, question=q, sort=i + 1, score=scores[i])
                 for i, q in enumerate(ordered)
             ])
             paper.status = Paper.STATUS_DRAFT
@@ -469,23 +563,36 @@ class AnswerViewSet(BaseViewSet):
         })
 
 
-class GradeOptionsView(APIView):
-    """GET /api/exam/grades/ 年级字典（测评发布等下拉使用）。
+if user.role == User.ROLE_STUDENT:
+    # 越权保护：仅已发布，且学校/班级匹配本人
+    class_ids = services.student_class_ids(user)
+    qs = qs.filter(
+        Q(school_isnull=True) | Q(school_id=user.school_id),
+        Q(target_class_isnull=True) | Q(target_class_id__in=class_ids),
+        status=FunContent.STATUS_PUBLISHED,
+    )
+return qs
 
-    返回标准一至六年级，并补充数据库班级里已使用的自定义年级。
-    """
+def list(self, request, *args, **kwargs):
+    """列表：支持 subject / status / category / keyword 筛选并分页。"""
+    qs = self.get_queryset()
+    params = request.query_params
 
-    permission_classes = [has_role(*PAPER_ROLES)]
+    subject = params.get("subject")
+    if subject:
+        qs = qs.filter(subject=subject)
+    # 学生只能看已发布内容，忽略 status 参数
+    status = params.get("status")
+    if status and request.user.role != User.ROLE_STUDENT:
+        qs = qs.filter(status=status)
+    category = params.get("category")
+    if category:
+        qs = qs.filter(category=category)
+    keyword = (params.get("keyword") or "").strip()
+    if keyword:
+        qs = qs.filter(Q(title__icontains=keyword) | Q(summary__icontains=keyword))
 
-    def get(self, request):
-        grades = list(GRADE_OPTIONS)
-        used = (
-            ClassRoom.objects.filter(is_deleted=False)
-            .exclude(grade="")
-            .values_list("grade", flat=True)
-            .distinct()
-        )
-        for grade in used:
-            if grade and grade not in grades:
-                grades.append(grade)
-        return ApiResponse(data=[{"value": grade, "label": grade} for grade in grades])
+    qs = qs.order_by("-published_at", "-created_at")
+    page = self.paginate_queryset(qs)
+    serializer = self.get_serializer(page, many=True)
+    return self.get_paginated_response(serializer.data)

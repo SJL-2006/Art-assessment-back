@@ -23,3 +23,9 @@ Thumbs.db
 .idea/
 .vscode/
 art-backend.zip
+
+# SSH 部署密钥（绝不能提交）
+art_assessment
+art_assessment.pub
+*.pem
+*.key
