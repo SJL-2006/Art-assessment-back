@@ -563,36 +563,99 @@ class AnswerViewSet(BaseViewSet):
         })
 
 
-if user.role == User.ROLE_STUDENT:
-    # 越权保护：仅已发布，且学校/班级匹配本人
-    class_ids = services.student_class_ids(user)
-    qs = qs.filter(
-        Q(school_isnull=True) | Q(school_id=user.school_id),
-        Q(target_class_isnull=True) | Q(target_class_id__in=class_ids),
-        status=FunContent.STATUS_PUBLISHED,
-    )
-return qs
+class GradeOptionsView(APIView):
+    """GET /api/exam/grades/ 年级字典（测评发布等下拉使用）。
 
-def list(self, request, *args, **kwargs):
-    """列表：支持 subject / status / category / keyword 筛选并分页。"""
-    qs = self.get_queryset()
-    params = request.query_params
+    返回标准一至六年级，并补充数据库班级里已使用的自定义年级。
+    """
 
-    subject = params.get("subject")
-    if subject:
-        qs = qs.filter(subject=subject)
-    # 学生只能看已发布内容，忽略 status 参数
-    status = params.get("status")
-    if status and request.user.role != User.ROLE_STUDENT:
-        qs = qs.filter(status=status)
-    category = params.get("category")
-    if category:
-        qs = qs.filter(category=category)
-    keyword = (params.get("keyword") or "").strip()
-    if keyword:
-        qs = qs.filter(Q(title__icontains=keyword) | Q(summary__icontains=keyword))
+    permission_classes = [has_role(*PAPER_ROLES)]
 
-    qs = qs.order_by("-published_at", "-created_at")
-    page = self.paginate_queryset(qs)
-    serializer = self.get_serializer(page, many=True)
-    return self.get_paginated_response(serializer.data)
+    def get(self, request):
+        grades = list(GRADE_OPTIONS)
+        used = (
+            ClassRoom.objects.filter(is_deleted=False)
+            .exclude(grade="")
+            .values_list("grade", flat=True)
+            .distinct()
+        )
+        for grade in used:
+            if grade and grade not in grades:
+                grades.append(grade)
+        return ApiResponse(data=[{"value": grade, "label": grade} for grade in grades])
+
+
+class FunContentViewSet(BaseViewSet):
+    """趣味课堂：省级发布管理，学生按发布范围可见。"""
+
+    queryset = FunContent.objects.all()
+    serializer_class = FunContentSerializer
+
+    def get_permissions(self):
+        if self.action in ("list", "retrieve"):
+            return [has_role(User.ROLE_STUDENT, User.ROLE_PROVINCE)()]
+        return [has_role(User.ROLE_PROVINCE)()]
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related("creator", "school", "target_class")
+        user = self.request.user
+        if user.role == User.ROLE_STUDENT:
+            # 越权保护：仅已发布，且学校/班级匹配本人
+            class_ids = services.student_class_ids(user)
+            qs = qs.filter(
+                Q(school__isnull=True) | Q(school_id=user.school_id),
+                Q(target_class__isnull=True) | Q(target_class_id__in=class_ids),
+                status=FunContent.STATUS_PUBLISHED,
+            )
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        """列表：支持 subject / status / category / keyword 筛选并分页。"""
+        qs = self.get_queryset()
+        params = request.query_params
+
+        subject = params.get("subject")
+        if subject:
+            qs = qs.filter(subject=subject)
+        # 学生只能看已发布内容，忽略 status 参数
+        status = params.get("status")
+        if status and request.user.role != User.ROLE_STUDENT:
+            qs = qs.filter(status=status)
+        category = params.get("category")
+        if category:
+            qs = qs.filter(category=category)
+        keyword = (params.get("keyword") or "").strip()
+        if keyword:
+            qs = qs.filter(Q(title__icontains=keyword) | Q(summary__icontains=keyword))
+
+        qs = qs.order_by("-published_at", "-created_at")
+        page = self.paginate_queryset(qs)
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
+
+    def perform_create(self, serializer):
+        """creator / school 由后端注入，省级发布不绑定学校。"""
+        user = self.request.user
+        extra = {"creator": user, "school": user.school if user.school_id else None}
+        # 创建即发布时补齐发布时间
+        if serializer.validated_data.get("status") == FunContent.STATUS_PUBLISHED:
+            extra["published_at"] = timezone.now()
+        serializer.save(**extra)
+
+    @action(detail=True, methods=["post"])
+    def publish(self, request, pk=None):
+        """发布：学生端可见。"""
+        content = self.get_object()
+        content.status = FunContent.STATUS_PUBLISHED
+        content.published_at = timezone.now()
+        content.save(update_fields=["status", "published_at", "updated_at"])
+        return ApiResponse(self.get_serializer(content).data, message="发布成功")
+
+    @action(detail=True, methods=["post"])
+    def recall(self, request, pk=None):
+        """撤回：学生端不可见。"""
+        content = self.get_object()
+        content.status = FunContent.STATUS_DRAFT
+        content.published_at = None
+        content.save(update_fields=["status", "published_at", "updated_at"])
+        return ApiResponse(self.get_serializer(content).data, message="已撤回")
