@@ -91,6 +91,13 @@ class QuestionViewSet(BaseViewSet):
             value = params.get(param)
             if value:
                 qs = qs.filter(**{field: value})
+        # 学科筛选（音乐/美术）：按课程代码过滤。音乐可能拆分为多个课程
+        # （如 音乐鉴赏 / 初中音乐 / 高中音乐 / 小学音乐，code 均为 "music"），
+        # 因此不能只按单个 course_id 过滤，需按 course.code 聚合。
+        subject = params.get("subject")
+        if subject:
+            code = "art" if subject in ("art", "美术") else "music"
+            qs = qs.filter(course__code=code)
         return qs
 
     @extend_schema(
