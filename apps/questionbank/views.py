@@ -1,4 +1,5 @@
 """题库：课程、章节、试题及其嵌套资源与审核接口。"""
+from django.db.models import Case, IntegerField, Value, When
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.views import APIView
@@ -62,9 +63,33 @@ class ChapterViewSet(BaseViewSet):
         return qs
 
 
+# 年级排序键：小学 → 初中 → 高中（一年级…高三），空值/未知排最后
+_GRADES = [
+    "一年级", "二年级", "三年级", "四年级", "五年级", "六年级",
+    "七年级", "八年级", "九年级", "高一", "高二", "高三",
+]
+GRADE_ORDER = Case(
+    *[When(grade=g, then=Value(i)) for i, g in enumerate(_GRADES, start=1)],
+    default=Value(len(_GRADES) + 1),
+    output_field=IntegerField(),
+)
+
+
 class QuestionViewSet(BaseViewSet):
     """试题 CRUD 及嵌套资源/审核接口。"""
-    queryset = Question.objects.all()
+    # 默认排序：按学科（音乐在前、美术在后）→ 年级（一年级…高三）→ id，
+    # 使音乐/美术各自连在一起、组内按年级有序，便于题库浏览。
+    queryset = (
+        Question.objects.select_related("course", "chapter")
+        .annotate(
+            subject_order=Case(
+                When(course__code="art", then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("subject_order", GRADE_ORDER, "id")
+    )
     serializer_class = QuestionSerializer
     search_fields = ["stem"]
     ordering_fields = ["id", "difficulty", "score"]
