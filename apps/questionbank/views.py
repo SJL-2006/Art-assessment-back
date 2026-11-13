@@ -77,18 +77,11 @@ GRADE_ORDER = Case(
 
 class QuestionViewSet(BaseViewSet):
     """试题 CRUD 及嵌套资源/审核接口。"""
-    # 默认排序：按学科（音乐在前、美术在后）→ 年级（一年级…高三）→ id，
-    # 使音乐/美术各自连在一起、组内按年级有序，便于题库浏览。
+    # 默认排序：按年级（一年级…高三）→ id。全部学科时音乐/美术不分开，
+    # 直接按年级顺序排列；选择具体学科（subject 筛选）后同样按年级有序。
     queryset = (
         Question.objects.select_related("course", "chapter")
-        .annotate(
-            subject_order=Case(
-                When(course__code="art", then=Value(1)),
-                default=Value(0),
-                output_field=IntegerField(),
-            )
-        )
-        .order_by("subject_order", GRADE_ORDER, "id")
+        .order_by(GRADE_ORDER, "id")
     )
     serializer_class = QuestionSerializer
     search_fields = ["stem"]
