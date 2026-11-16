@@ -77,7 +77,7 @@ class QuestionViewSet(BaseViewSet):
     def get_permissions(self):
         if self.action in ("review_question", "list_reviews"):
             return [has_role(User.ROLE_QB_ADMIN)()]
-        if self.action in ("list", "retrieve"):
+        if self.action in ("list", "retrieve", "stats"):
             return [has_role(*QUESTION_READ_ROLES)()]
         return [has_role(User.ROLE_TEACHER, User.ROLE_QB_ADMIN)()]
 
@@ -177,6 +177,37 @@ class QuestionViewSet(BaseViewSet):
         question = self.get_object()
         reviews = question.reviews.all()
         return ApiResponse(QuestionReviewSerializer(reviews, many=True).data)
+
+    @extend_schema(responses={200: None})
+    @action(detail=False, methods=["get"], url_path="stats")
+    def stats(self, request):
+        """题库统计：待审核/已通过/已驳回数量与最近审核记录（前端审核页角标使用）。"""
+        qs = Question.objects.filter(is_deleted=False)
+        pending = qs.filter(status=Question.STATUS_PENDING).count()
+        approved = qs.filter(status=Question.STATUS_APPROVED).count()
+        rejected = qs.filter(status=Question.STATUS_REJECTED).count()
+
+        recent_reviews = []
+        for review in (
+            QuestionReview.objects.select_related("question", "reviewer")
+            .filter(is_deleted=False)
+            .order_by("-created_at")[:10]
+        ):
+            recent_reviews.append({
+                "id": review.id,
+                "result": review.result,
+                "comment": review.comment or "",
+                "question": review.question.stem[:50] if review.question else "",
+                "reviewer": review.reviewer.username if review.reviewer else "",
+                "time": review.created_at.isoformat() if review.created_at else "",
+            })
+
+        return ApiResponse(data={
+            "pending": pending,
+            "approved": approved,
+            "rejected": rejected,
+            "recent_reviews": recent_reviews,
+        })
 
 
 # 试题资源独立管理：列表/详情对教师、题库管理员、省级开放；写操作仅题库管理员、省级
