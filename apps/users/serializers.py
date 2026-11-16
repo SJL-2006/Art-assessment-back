@@ -7,6 +7,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.settings import api_settings
 
+from apps.classroom.models import APPROVED, ClassStudent
 from apps.common.exceptions import ApiException
 from apps.common.response import ErrorCode
 from apps.users.models import User
@@ -40,14 +41,61 @@ class LoginSerializer(TokenObtainPairSerializer):
 class UserSerializer(serializers.ModelSerializer):
     """用户通用序列化器。"""
     role_display = serializers.CharField(source="get_role_display", read_only=True)
+    school_name = serializers.SerializerMethodField()
+    school_code = serializers.SerializerMethodField()
+    region_name = serializers.SerializerMethodField()
+    classes = serializers.SerializerMethodField()
+    class_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id", "username", "real_name", "phone", "avatar", "role", "role_display",
-            "student_no", "staff_no", "school", "region", "email", "date_joined",
+            "student_no", "staff_no", "school", "school_name", "school_code",
+            "region", "region_name", "classes", "class_name", "email", "date_joined",
         ]
         read_only_fields = ["id", "username", "role", "date_joined"]
+
+    # ---- 展示字段：个人信息页需要学校名/学校编号/所在班级 ----
+    def get_school_name(self, obj):
+        return obj.school.name if obj.school_id else ""
+
+    def get_school_code(self, obj):
+        return obj.school.code if obj.school_id else ""
+
+    def get_region_name(self, obj):
+        return obj.region.name if obj.region_id else ""
+
+    def _approved_classes(self, obj):
+        """学生已通过审核的班级（一次查询，同一次序列化内复用）。"""
+        cached = getattr(obj, "_approved_classes_cache", None)
+        if cached is None:
+            cached = list(
+                ClassStudent.objects.filter(
+                    student=obj, status=APPROVED, is_deleted=False,
+                ).select_related("klass", "klass__school")
+            )
+            obj._approved_classes_cache = cached
+        return cached
+
+    def get_classes(self, obj):
+        if obj.role != User.ROLE_STUDENT:
+            return []
+        return [
+            {
+                "class_id": row.klass_id,
+                "class_name": row.klass.name,
+                "class_code": row.klass.code,
+                "school_name": row.klass.school.name if row.klass.school_id else "",
+            }
+            for row in self._approved_classes(obj)
+        ]
+
+    def get_class_name(self, obj):
+        if obj.role != User.ROLE_STUDENT:
+            return ""
+        rows = self._approved_classes(obj)
+        return rows[0].klass.name if rows else ""
 
 
 class RegisterSerializer(serializers.ModelSerializer):
