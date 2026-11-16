@@ -116,24 +116,6 @@ class QuestionViewSet(BaseViewSet):
         """创建试题时记录创建人，供「创建人」列与分类筛选使用。"""
         serializer.save(creator=self.request.user)
 
-    @extend_schema(responses={200: None})
-    @action(detail=False, methods=["get"], url_path="stats")
-    def stats(self, request):
-        """题库统计：总题数与各课程题量（教师端试题库首页使用）。"""
-        qs = self.get_queryset()
-        courses = (
-            Course.objects.filter(is_deleted=False)
-            .annotate(count=Count("questions", filter=Q(questions__is_deleted=False)))
-            .order_by("id")
-        )
-        return ApiResponse(data={
-            "total": qs.count(),
-            "by_course": [
-                {"id": c.id, "code": c.code, "name": c.name, "count": c.count}
-                for c in courses
-            ],
-        })
-
     @extend_schema(
         request=QuestionResourceSerializer,
         responses={201: QuestionResourceSerializer},
@@ -200,11 +182,34 @@ class QuestionViewSet(BaseViewSet):
     @extend_schema(responses={200: None})
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
-        """题库统计：待审核/已通过/已驳回数量与最近审核记录（前端审核页角标使用）。"""
+        """题库统计：总题数、审核状态数量、学科/题型分布与最近审核记录。
+
+        供三处前端使用（原有两个同名 stats 方法导致后定义的覆盖前者，现将字段合并）：
+        - 题库管理员「试题库首页」：total/approved/pending/rejected/by_course/by_type/recent_reviews
+        - 教师「试题库」：total/by_course
+        - 题库管理员「试题审核」页角标：pending/approved/rejected/recent_reviews
+        """
         qs = Question.objects.filter(is_deleted=False)
+
+        total = qs.count()
         pending = qs.filter(status=Question.STATUS_PENDING).count()
         approved = qs.filter(status=Question.STATUS_APPROVED).count()
         rejected = qs.filter(status=Question.STATUS_REJECTED).count()
+
+        by_type = {
+            row["qtype"]: row["count"]
+            for row in qs.values("qtype").annotate(count=Count("id"))
+        }
+
+        courses = (
+            Course.objects.filter(is_deleted=False)
+            .annotate(count=Count("questions", filter=Q(questions__is_deleted=False)))
+            .order_by("id")
+        )
+        by_course = [
+            {"id": c.id, "code": c.code, "name": c.name, "count": c.count}
+            for c in courses
+        ]
 
         recent_reviews = []
         for review in (
@@ -222,9 +227,12 @@ class QuestionViewSet(BaseViewSet):
             })
 
         return ApiResponse(data={
+            "total": total,
             "pending": pending,
             "approved": approved,
             "rejected": rejected,
+            "by_course": by_course,
+            "by_type": by_type,
             "recent_reviews": recent_reviews,
         })
 
