@@ -1,4 +1,5 @@
 """题库：课程、章节、试题及其嵌套资源与审核接口。"""
+from django.db.models import Case, IntegerField, Value, When
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.views import APIView
@@ -62,9 +63,26 @@ class ChapterViewSet(BaseViewSet):
         return qs
 
 
+# 年级排序键：小学 → 初中 → 高中（一年级…高三），空值/未知排最后
+_GRADES = [
+    "一年级", "二年级", "三年级", "四年级", "五年级", "六年级",
+    "七年级", "八年级", "九年级", "高一", "高二", "高三",
+]
+GRADE_ORDER = Case(
+    *[When(grade=g, then=Value(i)) for i, g in enumerate(_GRADES, start=1)],
+    default=Value(len(_GRADES) + 1),
+    output_field=IntegerField(),
+)
+
+
 class QuestionViewSet(BaseViewSet):
     """试题 CRUD 及嵌套资源/审核接口。"""
-    queryset = Question.objects.all()
+    # 默认排序：按年级（一年级…高三）→ id。全部学科时音乐/美术不分开，
+    # 直接按年级顺序排列；选择具体学科（subject 筛选）后同样按年级有序。
+    queryset = (
+        Question.objects.select_related("course", "chapter")
+        .order_by(GRADE_ORDER, "id")
+    )
     serializer_class = QuestionSerializer
     search_fields = ["stem"]
     ordering_fields = ["id", "difficulty", "score"]
@@ -97,6 +115,13 @@ class QuestionViewSet(BaseViewSet):
             qs = qs.filter(creator__role__in=(User.ROLE_QB_ADMIN, User.ROLE_PROVINCE))
         elif creator_role in ("教师", "teacher"):
             qs = qs.filter(creator__role=User.ROLE_TEACHER)
+        # 学科筛选（音乐/美术）：按课程代码过滤。音乐可能拆分为多个课程
+        # （如 音乐鉴赏 / 初中音乐 / 高中音乐 / 小学音乐，code 均为 "music"），
+        # 因此不能只按单个 course_id 过滤，需按 course.code 聚合。
+        subject = params.get("subject")
+        if subject:
+            code = "art" if subject in ("art", "美术") else "music"
+            qs = qs.filter(course__code=code)
         return qs
 
     def perform_create(self, serializer):
