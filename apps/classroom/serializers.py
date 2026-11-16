@@ -1,17 +1,22 @@
 """班级相关序列化器。"""
 from rest_framework import serializers
 
-from apps.classroom.models import ClassRoom, ClassStudent, ClassTeacher
+from apps.classroom.models import APPROVED, ClassRoom, ClassStudent, ClassTeacher
 
 
 class ClassRoomSerializer(serializers.ModelSerializer):
     """班级基础序列化器。"""
     school_name = serializers.CharField(source="school.name", read_only=True)
     head_teacher_name = serializers.CharField(source="head_teacher.real_name", read_only=True)
+    student_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ClassRoom
         fields = "__all__"
+
+    def get_student_count(self, obj) -> int:
+        """已审核通过的学生人数（列表与详情展示用）。"""
+        return obj.students.filter(status=APPROVED, is_deleted=False).count()
 
 
 class ClassStudentSerializer(serializers.ModelSerializer):

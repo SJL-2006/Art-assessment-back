@@ -91,7 +91,17 @@ class QuestionViewSet(BaseViewSet):
             value = params.get(param)
             if value:
                 qs = qs.filter(**{field: value})
+        # 「创建人」分类筛选：管理员（题库管理员/省级）或教师
+        creator_role = params.get("creator_role")
+        if creator_role in ("管理员", "admin", "qb_admin"):
+            qs = qs.filter(creator__role__in=(User.ROLE_QB_ADMIN, User.ROLE_PROVINCE))
+        elif creator_role in ("教师", "teacher"):
+            qs = qs.filter(creator__role=User.ROLE_TEACHER)
         return qs
+
+    def perform_create(self, serializer):
+        """创建试题时记录创建人，供「创建人」列与分类筛选使用。"""
+        serializer.save(creator=self.request.user)
 
     @extend_schema(
         request=QuestionResourceSerializer,
