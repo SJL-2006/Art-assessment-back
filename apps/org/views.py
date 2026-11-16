@@ -62,6 +62,11 @@ class SchoolViewSet(BaseViewSet):
     ordering_fields = ["id"]
 
     def get_permissions(self):
+        # 教师读学校列表：学生导入时需选择归属学校
+        if self.action in ("list", "retrieve"):
+            return [has_role(
+                User.ROLE_TEACHER, User.ROLE_DISTRICT, User.ROLE_CITY, User.ROLE_PROVINCE,
+            )()]
         return [has_role(User.ROLE_DISTRICT, User.ROLE_CITY, User.ROLE_PROVINCE)()]
 
     def get_queryset(self):
