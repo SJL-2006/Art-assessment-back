@@ -133,37 +133,20 @@ def available_publishes(student, now=None):
     )
     condition = Q(pk__in=[])
     class_ids = student_class_ids(student)
-    student_school_id = student.school_id
-    grade = student_grade(student)
-    region_ids = student_region_chain(student)
-
-    # 班级范围：只要在该班就可见（班级天然有年级，无需额外检查）
     if class_ids:
         condition |= Q(scope_type=PaperPublish.SCOPE_CLASS, target_class_id__in=class_ids)
-
-    # 学校范围：同校，且若发布时指定了年级则必须与学生年级一致
-    if student_school_id:
-        school_q = Q(scope_type=PaperPublish.SCOPE_SCHOOL, target_school_id=student_school_id)
+    if student.school_id:
+        condition |= Q(scope_type=PaperPublish.SCOPE_SCHOOL, target_school_id=student.school_id)
+        grade = student_grade(student)
         if grade:
-            school_q &= Q(Q(grade="") | Q(grade=grade))
-        condition |= school_q
-
-    # 年级范围：发布的年级必须与学生年级一致；可选附加学校/行政区约束
-    if grade:
-        grade_q = Q(scope_type=PaperPublish.SCOPE_GRADE, grade=grade)
-        if student_school_id:
-            grade_q &= Q(Q(target_school_id__isnull=True) | Q(target_school_id=student_school_id))
-        if region_ids:
-            grade_q &= Q(Q(target_region_id__isnull=True) | Q(target_region_id__in=region_ids))
-        condition |= grade_q
-
-    # 行政区范围：同行政区链，且若发布时指定了年级则必须与学生年级一致
+            condition |= Q(
+                scope_type=PaperPublish.SCOPE_GRADE,
+                target_school_id=student.school_id,
+                paper__grade=grade,
+            )
+    region_ids = student_region_chain(student)
     if region_ids:
-        region_q = Q(scope_type=PaperPublish.SCOPE_REGION, target_region_id__in=region_ids)
-        if grade:
-            region_q &= Q(Q(grade="") | Q(grade=grade))
-        condition |= region_q
-
+        condition |= Q(scope_type=PaperPublish.SCOPE_REGION, target_region_id__in=region_ids)
     return qs.filter(condition)
 
 

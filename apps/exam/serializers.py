@@ -184,8 +184,6 @@ class PublishCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({"paper": "试卷状态必须为草稿或已发布才能发布"})
 
         scope_type = attrs["scope_type"]
-        grade = (attrs.get("grade") or "").strip()
-
         if scope_type == PaperPublish.SCOPE_CLASS:
             if not attrs.get("target_school"):
                 raise serializers.ValidationError({"target_school": "scope_type=class 时 target_school 必填"})
@@ -197,18 +195,7 @@ class PublishCreateSerializer(serializers.Serializer):
         elif scope_type == PaperPublish.SCOPE_REGION:
             if not attrs.get("target_region"):
                 raise serializers.ValidationError({"target_region": "scope_type=region 时 target_region 必填"})
-        elif scope_type == PaperPublish.SCOPE_GRADE:
-            if not grade:
-                raise serializers.ValidationError({"grade": "scope_type=grade 时 grade 必填"})
-
-        # 时间窗：start_at < end_at
-        start_at = attrs.get("start_at")
-        end_at = attrs.get("end_at")
-        if start_at and end_at and start_at >= end_at:
-            raise serializers.ValidationError({"end_at": "结束时间必须晚于开始时间"})
-
-        # 清洗 grade
-        attrs["grade"] = grade
+        # scope_type=grade：无必填 target，grade 可选
         return attrs
 
 
