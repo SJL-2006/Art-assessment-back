@@ -33,12 +33,28 @@ SUBJECT_TO_COURSE_NAME = {
 }
 
 # 练习默认抽题配置：题型 × 数量（某题型不足时自动降级，有多少抽多少）
+# 仅当请求未指定 question_count 且未指定 qtypes 时使用
 PRACTICE_QTYPE_CONFIG = [
     ("single", 5),
     ("multiple", 2),
     ("judge", 3),
     ("fill", 2),
 ]
+
+# 未指定题量时的兜底抽取数量
+DEFAULT_QUESTION_COUNT = 10
+
+
+def _as_list(value):
+    """把 list / JSON 字符串 / 逗号分隔字符串统一成字符串列表。"""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value).strip()
+    if not text:
+        return []
+    return [part.strip() for part in text.split(",") if part.strip()]
 
 
 def resolve_course(subject):
@@ -75,8 +91,16 @@ class PracticeViewSet(viewsets.GenericViewSet):
     def random(self, request):
         """按学科随机组卷并创建练习答卷。
 
-        body: {"subject": "music" | "art"}
-        返回: {sheet, paper, questions}，HTTP 201。
+        body:
+            {
+              "subject": "music" | "art",          # 必填
+              "question_count": 10,                # 选填，总题数；不传则按默认配置抽
+              "qtypes": ["single", "judge"],       # 选填，题型；支持数组或 "single,judge"
+              "difficulties": ["easy", "medium"],  # 选填，难度；支持数组或逗号分隔
+              "chapter_id": 3,                     # 选填，限定章节
+              "grade": "三年级"                     # 选填；""/"all" 表示不限年级
+            }
+        返回: {sheet, paper, questions, meta}，HTTP 201。
         """
         subject = request.data.get("subject")
         if subject not in (Paper.SUBJECT_MUSIC, Paper.SUBJECT_ART):
@@ -85,21 +109,71 @@ class PracticeViewSet(viewsets.GenericViewSet):
         course = resolve_course(subject)
         base_qs = Question.objects.filter(course=course, status=Question.STATUS_APPROVED)
 
-        # 学生有已通过审核的班级且班级填了年级 → 按该年级抽题；否则不限年级
-        grade = services.student_grade(request.user)
+        # ---- 题型 / 难度 / 章节 过滤 ----
+        qtypes = _as_list(request.data.get("qtypes"))
+        if qtypes:
+            valid_types = {key for key, _ in Question.TYPE_CHOICES}
+            invalid = [q for q in qtypes if q not in valid_types]
+            if invalid:
+                raise ApiException(
+                    f"不支持的题型：{','.join(invalid)}", code=ErrorCode.INVALID_PARAM, status=400,
+                )
+            base_qs = base_qs.filter(qtype__in=qtypes)
+
+        difficulties = _as_list(request.data.get("difficulties"))
+        if difficulties:
+            valid_diff = {key for key, _ in Question.DIFFICULTY_CHOICES}
+            invalid = [d for d in difficulties if d not in valid_diff]
+            if invalid:
+                raise ApiException(
+                    f"不支持的难度：{','.join(invalid)}", code=ErrorCode.INVALID_PARAM, status=400,
+                )
+            base_qs = base_qs.filter(difficulty__in=difficulties)
+
+        chapter_id = request.data.get("chapter_id")
+        if chapter_id:
+            base_qs = base_qs.filter(chapter_id=chapter_id)
+
+        # ---- 年级：未指定时沿用学生所在班级年级；显式传 ""/"all" 表示不限 ----
+        if "grade" in request.data:
+            grade = str(request.data.get("grade") or "").strip()
+            if grade.lower() == "all":
+                grade = ""
+        else:
+            grade = services.student_grade(request.user)
         if grade:
             base_qs = base_qs.filter(grade=grade)
 
-        picked = []
-        for qtype, count in PRACTICE_QTYPE_CONFIG:
-            picked.extend(base_qs.filter(qtype=qtype).order_by("?")[:count])
+        available_count = base_qs.count()
+        if available_count == 0:
+            raise ApiException(
+                "题库中没有符合条件（学科/题型/难度/年级）的试题，无法组卷",
+                code=ErrorCode.INVALID_PARAM, status=400,
+            )
 
-        if not picked:
-            raise ApiException("题库暂无该学科试题，无法组卷", code=ErrorCode.INVALID_PARAM, status=400)
+        # ---- 抽题 ----
+        raw_count = request.data.get("question_count")
+        try:
+            question_count = int(raw_count) if raw_count not in (None, "") else 0
+        except (TypeError, ValueError):
+            raise ApiException("question_count 必须是整数", code=ErrorCode.INVALID_PARAM, status=400)
+
+        if question_count > 0:
+            picked = list(base_qs.order_by("?")[:question_count])
+        elif qtypes:
+            # 指定了题型但没给题量：在所选题型内随机抽 DEFAULT_QUESTION_COUNT 道
+            picked = list(base_qs.order_by("?")[:DEFAULT_QUESTION_COUNT])
+        else:
+            # 未指定任何条件：沿用默认题型配额，某题型不足则有多少抽多少
+            picked = []
+            for qtype, count in PRACTICE_QTYPE_CONFIG:
+                picked.extend(base_qs.filter(qtype=qtype).order_by("?")[:count])
+            if not picked:
+                picked = list(base_qs.order_by("?")[:DEFAULT_QUESTION_COUNT])
 
         total_score = sum((q.score for q in picked), Decimal("0"))
         subject_display = dict(Paper.SUBJECT_CHOICES)[subject]
-        title = f"{subject_display}练习卷 · {timezone.now().strftime('%m%d%H%M')}"
+        title = f"{subject_display}练习卷 · {timezone.now().strftime('%m%d%H%M%S')}"
 
         with transaction.atomic():
             paper = Paper.objects.create(
@@ -132,6 +206,15 @@ class PracticeViewSet(viewsets.GenericViewSet):
             "sheet": services.sheet_payload(sheet),
             "paper": self._paper_payload(paper),
             "questions": [services.question_payload(link, request) for link in links],
+            "meta": {
+                "requested_count": question_count,
+                "picked_count": len(picked),
+                "available_count": available_count,
+                "shortage": max(0, question_count - len(picked)) if question_count else 0,
+                "qtypes": qtypes,
+                "difficulties": difficulties,
+                "grade": grade,
+            },
         }
         return ApiResponse(data=data, message="组卷成功", status=201)
 
