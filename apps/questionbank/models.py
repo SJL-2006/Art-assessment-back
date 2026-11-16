@@ -118,6 +118,10 @@ class QuestionResource(BaseModel):
     )
     rtype = models.CharField("资源类型", max_length=16, choices=TYPE_CHOICES)
     file = models.FileField("文件", upload_to="question/%Y/%m/")
+    option_key = models.CharField(
+        "对应选项", max_length=8, blank=True, default="",
+        help_text="为空表示整题资源；A/B/C/D 表示挂在该选项上",
+    )
 
     class Meta:
         db_table = "qb_question_resource"
