@@ -48,7 +48,8 @@ class AccountViewSet(BaseViewSet):
         if self.action == "materials":
             return [has_role(User.ROLE_TEACHER, User.ROLE_SCHOOL)()]
         if self.action == "batch_import":
-            return [has_role(User.ROLE_SCHOOL, User.ROLE_PROVINCE)()]
+            # 教师端「外校学生导入」需要批量导入学生
+            return [has_role(User.ROLE_TEACHER, User.ROLE_SCHOOL, User.ROLE_PROVINCE)()]
         if self.action == "batch_create":
             return [has_role(User.ROLE_SCHOOL)()]
         # 教师可查看/操作自己所带班级的学生（范围由 get_queryset 收敛）

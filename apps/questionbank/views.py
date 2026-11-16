@@ -1,4 +1,5 @@
 """题库：课程、章节、试题及其嵌套资源与审核接口。"""
+from django.db.models import Case, Count, IntegerField, Q, Value, When
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.views import APIView
@@ -114,6 +115,24 @@ class QuestionViewSet(BaseViewSet):
     def perform_create(self, serializer):
         """创建试题时记录创建人，供「创建人」列与分类筛选使用。"""
         serializer.save(creator=self.request.user)
+
+    @extend_schema(responses={200: None})
+    @action(detail=False, methods=["get"], url_path="stats")
+    def stats(self, request):
+        """题库统计：总题数与各课程题量（教师端试题库首页使用）。"""
+        qs = self.get_queryset()
+        courses = (
+            Course.objects.filter(is_deleted=False)
+            .annotate(count=Count("questions", filter=Q(questions__is_deleted=False)))
+            .order_by("id")
+        )
+        return ApiResponse(data={
+            "total": qs.count(),
+            "by_course": [
+                {"id": c.id, "code": c.code, "name": c.name, "count": c.count}
+                for c in courses
+            ],
+        })
 
     @extend_schema(
         request=QuestionResourceSerializer,
