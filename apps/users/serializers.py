@@ -99,12 +99,39 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    """用户注册。"""
+    """用户注册。
+
+    学校支持两种传法：
+    - school: 学校 ID（整数）
+    - school_code: 学校编号（字符串，如 SCH001），由后端解析为学校
+    两者都传时以 school_code 为准；仅传 school_code 时自动带出该学校所属行政区。
+    """
     password = serializers.CharField(write_only=True, validators=[validate_password])
+    school_code = serializers.CharField(
+        write_only=True, required=False, allow_blank=True,
+        help_text="学校编号，如 SCH001",
+    )
 
     class Meta:
         model = User
-        fields = ["username", "password", "role", "real_name", "phone", "student_no", "staff_no", "school", "region"]
+        fields = [
+            "username", "password", "role", "real_name", "phone",
+            "student_no", "staff_no", "school", "school_code", "region",
+        ]
+
+    def validate(self, attrs):
+        code = (attrs.pop("school_code", "") or "").strip()
+        if code:
+            from apps.org.models import School
+
+            school = School.objects.filter(code=code).first()
+            if school is None:
+                raise serializers.ValidationError({"school_code": f"学校编号 {code} 不存在"})
+            attrs["school"] = school
+            # 未指定行政区时，跟随学校所属区县
+            if not attrs.get("region") and school.region_id:
+                attrs["region"] = school.region
+        return attrs
 
     def create(self, validated_data):
         password = validated_data.pop("password")
