@@ -19,6 +19,7 @@ from rest_framework import mixins, permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.classroom.models import APPROVED, ClassRoom
 from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
 from apps.common.response import ApiResponse
@@ -50,6 +51,12 @@ class AccountViewSet(BaseViewSet):
             return [has_role(User.ROLE_SCHOOL, User.ROLE_PROVINCE)()]
         if self.action == "batch_create":
             return [has_role(User.ROLE_SCHOOL)()]
+        # 教师可查看/操作自己所带班级的学生（范围由 get_queryset 收敛）
+        if self.action in ("list", "retrieve", "reset_password"):
+            return [has_role(
+                User.ROLE_TEACHER, User.ROLE_SCHOOL, User.ROLE_DISTRICT,
+                User.ROLE_CITY, User.ROLE_PROVINCE,
+            )()]
         return [has_role(User.ROLE_SCHOOL, User.ROLE_DISTRICT, User.ROLE_CITY, User.ROLE_PROVINCE)()]
 
     # -------------------- User 软删除用 is_active --------------------
@@ -79,6 +86,23 @@ class AccountViewSet(BaseViewSet):
         directly = self.request.query_params.get("directly_affiliated")
         if directly is not None:
             qs = qs.filter(school__is_directly_affiliated=directly in ("1", "true", "True"))
+        # 教师：仅自己所带班级（班主任 / 已通过科任）中审核通过的学生
+        if self.request.user.role == User.ROLE_TEACHER:
+            classes = ClassRoom.objects.filter(
+                Q(head_teacher=self.request.user)
+                | Q(
+                    teachers__teacher=self.request.user,
+                    teachers__status=APPROVED,
+                    teachers__is_deleted=False,
+                ),
+                is_deleted=False,
+            )
+            return qs.filter(
+                role=User.ROLE_STUDENT,
+                class_memberships__klass__in=classes,
+                class_memberships__status=APPROVED,
+                class_memberships__is_deleted=False,
+            ).distinct()
         # 按 scope 收敛
         qs = filter_by_scope(qs, self.request.user, school_field="school", region_field="region")
         return qs
