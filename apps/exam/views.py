@@ -417,6 +417,11 @@ class PaperPublishViewSet(BaseViewSet):
 
         paper = data["paper"]
 
+        # 0 道题的试卷不允许发布
+        q_count = paper.paper_questions.count()
+        if q_count == 0:
+            raise ApiException("试卷没有题目，无法发布", status=400)
+
         with transaction.atomic():
             publish = PaperPublish.objects.create(
                 paper=paper,
