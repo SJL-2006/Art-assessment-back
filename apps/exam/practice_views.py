@@ -10,6 +10,7 @@
 2. GET  /api/exam/practice/sheets/      我的练习记录（publish 为空的答卷）
 3. GET  /api/exam/practice/{id}/sheets/ 练习详情（已提交才返回答案/解析与正确率统计）
 """
+import random
 from decimal import Decimal
 
 from django.db import transaction
@@ -33,7 +34,6 @@ SUBJECT_TO_COURSE_NAME = {
 }
 
 # 练习默认抽题配置：题型 × 数量（某题型不足时自动降级，有多少抽多少）
-# 仅当请求未指定 question_count 且未指定 qtypes 时使用
 PRACTICE_QTYPE_CONFIG = [
     ("single", 5),
     ("multiple", 2),
@@ -68,6 +68,15 @@ def resolve_course(subject):
     return course
 
 
+def _random_sample(queryset, count):
+    """用 Python random.sample 从 queryset 中真随机抽 count 条，比 order_by('?') 更可靠。"""
+    ids = list(queryset.values_list("id", flat=True))
+    if len(ids) <= count:
+        random.shuffle(ids)
+        return list(queryset.filter(id__in=ids))
+    return list(queryset.filter(id__in=random.sample(ids, count)))
+
+
 class PracticeViewSet(viewsets.GenericViewSet):
     """学生练习测评：随机组卷、练习记录、练习详情。"""
 
@@ -94,11 +103,11 @@ class PracticeViewSet(viewsets.GenericViewSet):
         body:
             {
               "subject": "music" | "art",          # 必填
-              "question_count": 10,                # 选填，总题数；不传则按默认配置抽
-              "qtypes": ["single", "judge"],       # 选填，题型；支持数组或 "single,judge"
-              "difficulties": ["easy", "medium"],  # 选填，难度；支持数组或逗号分隔
+              "question_count": 10,                # 选填，总题数
+              "qtypes": ["single", "judge"],       # 选填，题型；数组或 "single,judge"
+              "difficulties": ["easy", "medium"],  # 选填，难度；数组或逗号分隔
               "chapter_id": 3,                     # 选填，限定章节
-              "grade": "三年级"                     # 选填；""/"all" 表示不限年级
+              "grade": "三年级"                     # 选填；""/"all" 不限年级
             }
         返回: {sheet, paper, questions, meta}，HTTP 201。
         """
@@ -151,7 +160,7 @@ class PracticeViewSet(viewsets.GenericViewSet):
                 code=ErrorCode.INVALID_PARAM, status=400,
             )
 
-        # ---- 抽题 ----
+        # ---- 抽题（改用 Python random.sample 真随机）----
         raw_count = request.data.get("question_count")
         try:
             question_count = int(raw_count) if raw_count not in (None, "") else 0
@@ -159,17 +168,17 @@ class PracticeViewSet(viewsets.GenericViewSet):
             raise ApiException("question_count 必须是整数", code=ErrorCode.INVALID_PARAM, status=400)
 
         if question_count > 0:
-            picked = list(base_qs.order_by("?")[:question_count])
+            picked = _random_sample(base_qs, question_count)
         elif qtypes:
-            # 指定了题型但没给题量：在所选题型内随机抽 DEFAULT_QUESTION_COUNT 道
-            picked = list(base_qs.order_by("?")[:DEFAULT_QUESTION_COUNT])
+            picked = _random_sample(base_qs, DEFAULT_QUESTION_COUNT)
         else:
-            # 未指定任何条件：沿用默认题型配额，某题型不足则有多少抽多少
             picked = []
             for qtype, count in PRACTICE_QTYPE_CONFIG:
-                picked.extend(base_qs.filter(qtype=qtype).order_by("?")[:count])
+                picked.extend(_random_sample(base_qs.filter(qtype=qtype), count))
             if not picked:
-                picked = list(base_qs.order_by("?")[:DEFAULT_QUESTION_COUNT])
+                picked = _random_sample(base_qs, DEFAULT_QUESTION_COUNT)
+
+        random.shuffle(picked)
 
         total_score = sum((q.score for q in picked), Decimal("0"))
         subject_display = dict(Paper.SUBJECT_CHOICES)[subject]

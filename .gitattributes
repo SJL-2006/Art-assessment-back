@@ -1,0 +1,30 @@
+# 统一换行策略：仓库里全部存 LF
+* text=auto eol=lf
+
+# 明确规定哪些文件要按文本处理
+*.py    text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.js    text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.sh    text eol=lf
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
+
+# 二进制不做任何处理
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.docx  binary
+*.xlsx  binary
+*.zip   binary
+*.svg   binary
+*.woff  binary
+*.woff2 binary
