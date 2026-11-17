@@ -1,41 +1,91 @@
-
 """用户与认证相关视图。"""
+from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.views import APIView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from apps.classroom.models import APPROVED, ClassRoom, ClassTeacher
 from apps.common.exceptions import ApiException
 from apps.common.response import ApiResponse
-from apps.users.serializers import ChangePasswordSerializer, LoginSerializer, RegisterSerializer, UserSerializer
+from apps.users.models import User
+from apps.users.serializers import ChangePasswordSerializer, RegisterSerializer, UserSerializer
+
+
+class LoginSerializer(TokenObtainPairSerializer):
+    """登录规则：学生用学籍号，教师用职工编号，管理员用姓名。"""
+
+    def validate(self, attrs):
+        username = (attrs.get(self.username_field) or "").strip()
+        if username:
+            if username.isdigit():
+                user = (
+                    User.objects.filter(student_no=username, is_active=True).first()
+                    or User.objects.filter(staff_no=username, is_active=True).first()
+                )
+                if user:
+                    attrs[self.username_field] = user.username
+            else:
+                named = User.objects.filter(username=username, is_active=True).first()
+                if named:
+                    if named.role == User.ROLE_STUDENT:
+                        raise AuthenticationFailed("学生请使用学籍号登录")
+                    if named.role == User.ROLE_TEACHER:
+                        raise AuthenticationFailed("教师请使用职工编号登录")
+        return super().validate(attrs)
 
 
 class LoginView(TokenObtainPairView):
-    """#1 登录：username 字段兼容 用户名 / 学号 / 职工编号。"""
-
+    """登录视图：学生用学籍号，教师用职工编号，管理员用姓名。"""
     serializer_class = LoginSerializer
 
 
 class RegisterView(generics.CreateAPIView):
-    """#3 用户注册。
-
-    公开接口，提交 username/password/role 等字段创建账号。
-    """
-
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
 
 
+class SchoolCodeCheckView(APIView):
+    """注册页学校编号校验：GET /api/users/school-check/?code=0001。"""
+
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(responses={200: None})
+    def get(self, request):
+        from apps.org.models import School
+
+        code = (request.query_params.get("code") or "").strip()
+        school = School.objects.filter(code=code, is_deleted=False).first() if code else None
+        if school is None:
+            return ApiResponse({"exists": False})
+        return ApiResponse({"exists": True, "code": school.code, "name": school.name})
+
+
 class CurrentUserView(APIView):
-    """#4/#5 当前登录用户：GET 查询 / PUT 修改个人信息。"""
+    """当前登录用户：GET 查询 / PUT 修改个人信息。"""
+
+    permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(responses={200: UserSerializer})
     def get(self, request):
-        """获取当前用户信息。"""
-        return ApiResponse(UserSerializer(request.user).data)
+        data = UserSerializer(request.user).data
+        if request.user.role == User.ROLE_TEACHER:
+            data["head_class_count"] = ClassRoom.objects.filter(
+                head_teacher=request.user, is_deleted=False,
+            ).count()
+            teach_qs = ClassTeacher.objects.filter(
+                teacher=request.user, status=APPROVED, is_deleted=False,
+            ).select_related("course")
+            data["teaching_class_count"] = teach_qs.count()
+            data["teaching_class_names"] = list(teach_qs.values_list("klass__name", flat=True))
+            data["teaching_subjects"] = [
+                code for code in teach_qs.values_list("course__code", flat=True) if code
+            ]
+        return ApiResponse(data)
 
     def put(self, request):
-        """修改当前用户的个人信息（real_name / phone / avatar / email 等）。"""
         ser = UserSerializer(request.user, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
@@ -43,10 +93,7 @@ class CurrentUserView(APIView):
 
 
 class ChangePasswordView(APIView):
-    """#6 修改密码。
-
-    需传入 old_password + new_password，校验旧密码正确后更新。
-    """
+    permission_classes = [permissions.IsAuthenticated]
 
     @extend_schema(request=ChangePasswordSerializer, responses={200: None})
     def post(self, request):

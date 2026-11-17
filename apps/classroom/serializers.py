@@ -1,28 +1,30 @@
 """班级相关序列化器。"""
 from rest_framework import serializers
 
-from apps.classroom.models import APPROVED, ClassRoom, ClassStudent, ClassTeacher
+from apps.classroom.models import ClassRoom, ClassStudent, ClassTeacher
 
 
 class ClassRoomSerializer(serializers.ModelSerializer):
     """班级基础序列化器。"""
-    school_name = serializers.CharField(source="school.name", read_only=True)
-    head_teacher_name = serializers.CharField(source="head_teacher.real_name", read_only=True)
-    student_count = serializers.SerializerMethodField()
+    code = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    school_name = serializers.CharField(source="school.name", read_only=True, default="")
+    school_code = serializers.CharField(source="school.code", read_only=True, default="")
+    head_teacher_name = serializers.CharField(source="head_teacher.real_name", read_only=True, default="")
+    head_teacher_email = serializers.CharField(source="head_teacher.email", read_only=True, default="")
+    student_count = serializers.IntegerField(read_only=True, required=False)
+    is_my_head = serializers.BooleanField(read_only=True, required=False, default=False)
+    is_my_subject = serializers.BooleanField(read_only=True, required=False, default=False)
 
     class Meta:
         model = ClassRoom
         fields = "__all__"
-
-    def get_student_count(self, obj) -> int:
-        """已审核通过的学生人数（列表与详情展示用）。"""
-        return obj.students.filter(status=APPROVED, is_deleted=False).count()
 
 
 class ClassStudentSerializer(serializers.ModelSerializer):
     """班级-学生关系序列化器。"""
     student_username = serializers.CharField(source="student.username", read_only=True)
     student_real_name = serializers.CharField(source="student.real_name", read_only=True)
+    student_no = serializers.CharField(source="student.student_no", read_only=True, default="")
 
     class Meta:
         model = ClassStudent
@@ -57,6 +59,7 @@ class ApproveResultSerializer(serializers.Serializer):
 
 
 class ImportStudentsSerializer(serializers.Serializer):
-    """批量导入学生（传学生 ID 列表或学籍号列表）。"""
+    """批量导入学生（传学生 ID / 学籍号 / 账号名列表）。"""
     student_ids = serializers.ListField(child=serializers.IntegerField(), required=False)
     student_nos = serializers.ListField(child=serializers.CharField(), required=False)
+    usernames = serializers.ListField(child=serializers.CharField(), required=False)
