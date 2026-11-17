@@ -1,4 +1,4 @@
-"""判分与评分接口（C 域 #6-#11、#21）。
+"""判分与评分接口（C 域 #6-#11、#21、教师答卷评分）。
 
 接口清单：
 6.  GET    /api/exam/students/{id}/extracurricular/     查看学生课外学习材料
@@ -8,6 +8,10 @@
 10. POST   /api/exam/scores/import/                     导入学生线下成绩
 11. POST   /api/exam/scores/supplement/                 测评成绩补录
 21. GET    /api/exam/students/{id}/scores/export/       导出学生所有成绩
+教师答卷评分（增量）：
+    GET    /api/exam/teacher/answer-sheets/             教师看所带班级学生的答卷列表
+    GET    /api/exam/teacher/answer-sheets/{id}/        教师看答卷详情（逐题 + 学生答案 + 自动判分）
+    POST   /api/exam/teacher/answer-sheets/{id}/score/  教师对主观题打分（覆盖自动判分结果）
 """
 from decimal import Decimal, InvalidOperation
 
@@ -20,9 +24,12 @@ from apps.common.permissions import has_role
 from apps.common.response import ApiResponse, ErrorCode
 from apps.exam import services
 from apps.exam.exports import xlsx_response
-from apps.exam.models import AnswerSheet, ExtracurricularUpload, PerformanceScore
+from apps.exam.models import Answer, AnswerSheet, ExtracurricularUpload, PerformanceScore
 from apps.questionbank.models import Course
 from apps.users.models import User
+
+# 复用 student_views 里已有的教师班级/学生范围函数
+from apps.exam.student_views import _teacher_class_ids, _teacher_student_ids
 
 SUBJECT_NAME_MAP = {
     "music": "音乐", "音乐": "music",
@@ -354,3 +361,236 @@ class StudentScoresExportView(APIView):
         rows = _student_score_rows(student)
         filename = f"{student.real_name or student.username}_成绩.xlsx"
         return xlsx_response(filename, "学生成绩", headers, rows)
+
+
+# --------------------------------------------------------------------------
+# 教师视角的答卷评分接口
+# --------------------------------------------------------------------------
+
+class TeacherAnswerSheetListView(APIView):
+    """GET /api/exam/teacher/answer-sheets/  教师看所带班级学生的答卷列表。
+
+    查询参数：
+    - klass_id: 按班级过滤
+    - student_id: 按学生过滤
+    - paper_id: 按试卷过滤
+    - subject: 按学科过滤（music / art）
+    - submitted_only: true=只看已提交（默认 true）
+    """
+
+    permission_classes = [has_role(User.ROLE_TEACHER, User.ROLE_SCHOOL)]
+
+    def get(self, request):
+        user = request.user
+        if user.role == User.ROLE_TEACHER:
+            student_ids = _teacher_student_ids(user)
+            if not student_ids:
+                return ApiResponse(data={"list": [], "total": 0})
+        else:
+            # 学校账号：全校（通过 services.scoped_students）
+            student_ids = list(
+                services.scoped_students(user).values_list("id", flat=True)
+            )
+
+        qs = AnswerSheet.objects.filter(
+            student_id__in=student_ids, is_deleted=False,
+        ).select_related("paper", "student", "publish").order_by("-submitted_at", "-created_at")
+
+        klass_id = request.query_params.get("klass_id")
+        student_id = request.query_params.get("student_id")
+        paper_id = request.query_params.get("paper_id")
+        subject = request.query_params.get("subject")
+        submitted_only = request.query_params.get("submitted_only", "true").lower() == "true"
+
+        if klass_id:
+            qs = qs.filter(
+                student__class_memberships__klass_id=klass_id,
+                student__class_memberships__status=services.APPROVED,
+                student__class_memberships__is_deleted=False,
+            ).distinct()
+        if student_id:
+            qs = qs.filter(student_id=student_id)
+        if paper_id:
+            qs = qs.filter(paper_id=paper_id)
+        if subject:
+            qs = qs.filter(paper__subject=subject)
+        if submitted_only:
+            qs = qs.filter(is_submitted=True)
+
+        rows = []
+        for sheet in qs[:500]:  # 最多 500 条，避免一次拉太多
+            rows.append({
+                "sheet_id": sheet.id,
+                "paper_id": sheet.paper_id,
+                "paper_title": sheet.paper.title,
+                "subject": sheet.paper.subject,
+                "subject_display": sheet.paper.get_subject_display(),
+                "ptype": sheet.paper.ptype,
+                "student_id": sheet.student_id,
+                "student_name": sheet.student.real_name or sheet.student.username,
+                "student_no": sheet.student.student_no or "",
+                "is_submitted": sheet.is_submitted,
+                "total_score": float(sheet.total_score),
+                "paper_total": float(sheet.paper.total_score or 0),
+                "submitted_at": sheet.submitted_at,
+                "publish_id": sheet.publish_id,
+            })
+
+        return ApiResponse(data={"list": rows, "total": qs.count()})
+
+
+class TeacherAnswerSheetDetailView(APIView):
+    """GET /api/exam/teacher/answer-sheets/{id}/  教师看答卷详情（逐题 + 学生答案 + 判分）。"""
+
+    permission_classes = [has_role(User.ROLE_TEACHER, User.ROLE_SCHOOL)]
+
+    def get(self, request, sheet_id):
+        user = request.user
+        sheet = AnswerSheet.objects.filter(pk=sheet_id, is_deleted=False).select_related(
+            "paper", "student", "publish",
+        ).first()
+        if sheet is None:
+            raise ApiException("答卷不存在", ErrorCode.NOT_FOUND, 404)
+
+        # 权限检查：教师只能看自己所带班级学生的答卷
+        if user.role == User.ROLE_TEACHER:
+            allowed = _teacher_student_ids(user)
+            if sheet.student_id not in allowed:
+                raise ApiException("无权查看该学生答卷", ErrorCode.FORBIDDEN, 403)
+        else:
+            if not services.scoped_students(user).filter(id=sheet.student_id).exists():
+                raise ApiException("无权查看该学生答卷", ErrorCode.FORBIDDEN, 403)
+
+        # 逐题 + 学生答案
+        answers_map = {a.question_id: a for a in sheet.answers.filter(is_deleted=False)}
+        paper_questions = (
+            sheet.paper.paper_questions.filter(is_deleted=False)
+            .select_related("question")
+            .order_by("sort", "id")
+        )
+        questions = []
+        for pq in paper_questions:
+            q = pq.question
+            ans = answers_map.get(q.id)
+            questions.append({
+                "pq_id": pq.id,
+                "question_id": q.id,
+                "qtype": q.qtype,
+                "qtype_display": q.get_qtype_display(),
+                "stem": q.stem,
+                "score": float(pq.score or q.score or 0),
+                "sort": pq.sort,
+                "options": q.options if q.qtype in ("single", "multiple") else [],
+                "answer_text": ans.answer if ans else "",
+                "is_correct": ans.is_correct if ans else None,
+                "student_score": float(ans.score) if ans else 0,
+                "teacher_scored": bool(ans and ans.is_correct is None and ans.score > 0),
+                "analysis": q.analysis or "",
+                "reference_answer": q.answer or "",
+            })
+
+        return ApiResponse(data={
+            "sheet_id": sheet.id,
+            "is_submitted": sheet.is_submitted,
+            "total_score": float(sheet.total_score),
+            "paper_total": float(sheet.paper.total_score or 0),
+            "submitted_at": sheet.submitted_at,
+            "started_at": sheet.started_at,
+            "paper": {
+                "id": sheet.paper.id,
+                "title": sheet.paper.title,
+                "subject": sheet.paper.subject,
+                "subject_display": sheet.paper.get_subject_display(),
+                "ptype": sheet.paper.ptype,
+                "ptype_display": sheet.paper.get_ptype_display(),
+            },
+            "student": {
+                "id": sheet.student.id,
+                "name": sheet.student.real_name or sheet.student.username,
+                "student_no": sheet.student.student_no or "",
+            },
+            "questions": questions,
+            "question_count": len(questions),
+        })
+
+
+class TeacherAnswerSheetScoreView(APIView):
+    """POST /api/exam/teacher/answer-sheets/{id}/score/  教师对答卷逐题打分（覆盖自动判分结果）。
+
+    请求体：
+        {
+          "answers": [
+            {"question_id": 101, "score": 8, "comment": "答得不错"},
+            {"question_id": 102, "score": 0, "comment": "完全没答到点上"},
+          ]
+        }
+
+    打分后自动重算 sheet.total_score。
+    """
+
+    permission_classes = [has_role(User.ROLE_TEACHER, User.ROLE_SCHOOL)]
+
+    def post(self, request, sheet_id):
+        user = request.user
+        sheet = AnswerSheet.objects.filter(pk=sheet_id, is_deleted=False).first()
+        if sheet is None:
+            raise ApiException("答卷不存在", ErrorCode.NOT_FOUND, 404)
+
+        if user.role == User.ROLE_TEACHER:
+            allowed = _teacher_student_ids(user)
+            if sheet.student_id not in allowed:
+                raise ApiException("无权为该答卷打分", ErrorCode.FORBIDDEN, 403)
+        else:
+            if not services.scoped_students(user).filter(id=sheet.student_id).exists():
+                raise ApiException("无权为该答卷打分", ErrorCode.FORBIDDEN, 403)
+
+        answers = request.data.get("answers")
+        if not isinstance(answers, list) or not answers:
+            raise ApiException("answers 需为数组且非空", ErrorCode.INVALID_PARAM, 400)
+
+        # 试卷上所有题目（用于校验 question_id + 取满分）
+        paper_questions = {
+            pq.question_id: pq for pq in sheet.paper.paper_questions.filter(is_deleted=False)
+        }
+
+        updated = 0
+        for item in answers:
+            qid = item.get("question_id")
+            if qid is None or qid not in paper_questions:
+                continue
+            pq = paper_questions[qid]
+            try:
+                score = Decimal(str(item.get("score", 0)))
+            except (InvalidOperation, ValueError, TypeError):
+                continue
+            max_score = Decimal(str(pq.score or 0))
+            if score < 0:
+                score = Decimal("0")
+            if max_score > 0 and score > max_score:
+                score = max_score
+
+            ans, _created = Answer.objects.get_or_create(
+                sheet=sheet, question_id=qid,
+                defaults={"score": score},
+            )
+            ans.score = score
+            # 教师手动打分 → is_correct 设为 None（表示人工判分）
+            ans.is_correct = None
+            ans.save(update_fields=["score", "is_correct", "updated_at"])
+            updated += 1
+
+        # 重算答卷总分（Python 层求和，避免引入 django.db.models.Sum）
+        total = Decimal("0")
+        for a in Answer.objects.filter(sheet=sheet, is_deleted=False):
+            total += Decimal(str(a.score or 0))
+        sheet.total_score = total
+        sheet.save(update_fields=["total_score", "updated_at"])
+
+        return ApiResponse(
+            data={
+                "sheet_id": sheet.id,
+                "updated_count": updated,
+                "total_score": float(sheet.total_score),
+            },
+            message=f"打分完成：更新 {updated} 题，总分 {float(sheet.total_score)}",
+        )

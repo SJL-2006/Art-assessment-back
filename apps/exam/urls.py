@@ -103,4 +103,20 @@ urlpatterns = [
         stats_views.ParticipationExportView.as_view(),
         name="stats_participation_export",
     ),
+    # 教师视角：答卷列表 / 详情 / 打分
+    path(
+        "teacher/answer-sheets/",
+        score_views.TeacherAnswerSheetListView.as_view(),
+        name="teacher_answer_sheet_list",
+    ),
+    path(
+        "teacher/answer-sheets/<int:sheet_id>/",
+        score_views.TeacherAnswerSheetDetailView.as_view(),
+        name="teacher_answer_sheet_detail",
+    ),
+    path(
+        "teacher/answer-sheets/<int:sheet_id>/score/",
+        score_views.TeacherAnswerSheetScoreView.as_view(),
+        name="teacher_answer_sheet_score",
+    ),
 ] + router.urls
