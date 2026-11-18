@@ -43,6 +43,10 @@ art_assessment.pub
 *.mjs
 node_modules/
 
+# 项目文档需提交（变更记录 / 数据库变更记录）
+!docs/changelog/*.md
+!docs/database/*.md
+
 # Word / Excel / 临时文件
 *.docx
 *.doc
