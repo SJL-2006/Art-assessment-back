@@ -10,6 +10,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.common.views_logs import LogViewSet
+from apps.exam.search_views import GlobalSearchView
 from apps.users.views import LoginView
 from apps.users.views_accounts import AccountViewSet
 
@@ -46,6 +47,8 @@ urlpatterns = [
     path("api/content/", include("apps.content.urls")),
     # 系统
     path("api/logs/", include(logs_router.urls)),
+    # 全局搜索（跨模块：班级 / 试卷 / 学生）
+    path("api/search/", GlobalSearchView.as_view(), name="global_search"),
 ]
 
 if settings.DEBUG:
