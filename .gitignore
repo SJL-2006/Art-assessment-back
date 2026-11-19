@@ -29,3 +29,37 @@ art_assessment
 art_assessment.pub
 *.pem
 *.key
+
+# 前端/构建产物
+*.cmd
+*.ps1
+*.json
+*.ts
+*.cjs
+*.js
+*.md
+*.cts
+*.mts
+*.mjs
+node_modules/
+
+# 项目文档需提交（变更记录 / 数据库变更记录）
+!docs/changelog/*.md
+!docs/database/*.md
+
+# Word / Excel / 临时文件
+*.docx
+*.doc
+*.xlsx
+*.xls
+*.pptx
+*.ppt
+~$*
+*.tmp
+
+# 临时测试脚本
+test_remote*.py
+test_random.py
+check_db.py
+verify_random.py
+gen_doc.js

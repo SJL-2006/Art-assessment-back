@@ -78,7 +78,7 @@ class QuestionViewSet(BaseViewSet):
     def get_permissions(self):
         if self.action in ("review_question", "list_reviews"):
             return [has_role(User.ROLE_QB_ADMIN)()]
-        if self.action in ("list", "retrieve"):
+        if self.action in ("list", "retrieve", "stats"):
             return [has_role(*QUESTION_READ_ROLES)()]
         return [has_role(User.ROLE_TEACHER, User.ROLE_QB_ADMIN)()]
 
@@ -115,24 +115,6 @@ class QuestionViewSet(BaseViewSet):
     def perform_create(self, serializer):
         """创建试题时记录创建人，供「创建人」列与分类筛选使用。"""
         serializer.save(creator=self.request.user)
-
-    @extend_schema(responses={200: None})
-    @action(detail=False, methods=["get"], url_path="stats")
-    def stats(self, request):
-        """题库统计：总题数与各课程题量（教师端试题库首页使用）。"""
-        qs = self.get_queryset()
-        courses = (
-            Course.objects.filter(is_deleted=False)
-            .annotate(count=Count("questions", filter=Q(questions__is_deleted=False)))
-            .order_by("id")
-        )
-        return ApiResponse(data={
-            "total": qs.count(),
-            "by_course": [
-                {"id": c.id, "code": c.code, "name": c.name, "count": c.count}
-                for c in courses
-            ],
-        })
 
     @extend_schema(
         request=QuestionResourceSerializer,
@@ -196,6 +178,63 @@ class QuestionViewSet(BaseViewSet):
         question = self.get_object()
         reviews = question.reviews.all()
         return ApiResponse(QuestionReviewSerializer(reviews, many=True).data)
+
+    @extend_schema(responses={200: None})
+    @action(detail=False, methods=["get"], url_path="stats")
+    def stats(self, request):
+        """题库统计：总题数、审核状态数量、学科/题型分布与最近审核记录。
+
+        供三处前端使用（原有两个同名 stats 方法导致后定义的覆盖前者，现将字段合并）：
+        - 题库管理员「试题库首页」：total/approved/pending/rejected/by_course/by_type/recent_reviews
+        - 教师「试题库」：total/by_course
+        - 题库管理员「试题审核」页角标：pending/approved/rejected/recent_reviews
+        """
+        qs = Question.objects.filter(is_deleted=False)
+
+        total = qs.count()
+        pending = qs.filter(status=Question.STATUS_PENDING).count()
+        approved = qs.filter(status=Question.STATUS_APPROVED).count()
+        rejected = qs.filter(status=Question.STATUS_REJECTED).count()
+
+        by_type = {
+            row["qtype"]: row["count"]
+            for row in qs.values("qtype").annotate(count=Count("id"))
+        }
+
+        courses = (
+            Course.objects.filter(is_deleted=False)
+            .annotate(count=Count("questions", filter=Q(questions__is_deleted=False)))
+            .order_by("id")
+        )
+        by_course = [
+            {"id": c.id, "code": c.code, "name": c.name, "count": c.count}
+            for c in courses
+        ]
+
+        recent_reviews = []
+        for review in (
+            QuestionReview.objects.select_related("question", "reviewer")
+            .filter(is_deleted=False)
+            .order_by("-created_at")[:10]
+        ):
+            recent_reviews.append({
+                "id": review.id,
+                "result": review.result,
+                "comment": review.comment or "",
+                "question": review.question.stem[:50] if review.question else "",
+                "reviewer": review.reviewer.username if review.reviewer else "",
+                "time": review.created_at.isoformat() if review.created_at else "",
+            })
+
+        return ApiResponse(data={
+            "total": total,
+            "pending": pending,
+            "approved": approved,
+            "rejected": rejected,
+            "by_course": by_course,
+            "by_type": by_type,
+            "recent_reviews": recent_reviews,
+        })
 
 
 # 试题资源独立管理：列表/详情对教师、题库管理员、省级开放；写操作仅题库管理员、省级
