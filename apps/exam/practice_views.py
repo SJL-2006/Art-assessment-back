@@ -10,6 +10,7 @@
 2. GET  /api/exam/practice/sheets/      我的练习记录（publish 为空的答卷）
 3. GET  /api/exam/practice/{id}/sheets/ 练习详情（已提交才返回答案/解析与正确率统计）
 """
+import random
 from decimal import Decimal
 
 from django.db import transaction
@@ -55,6 +56,19 @@ def _as_list(value):
     if not text:
         return []
     return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _sample_questions(queryset, count):
+    """用 Python random.sample 随机抽题：题库不足时有多少抽多少。"""
+    ids = list(queryset.values_list("id", flat=True))
+    if count < len(ids):
+        ids = random.sample(ids, count)
+    else:
+        random.shuffle(ids)
+    if not ids:
+        return []
+    mapping = {q.id: q for q in queryset.model.objects.filter(id__in=ids)}
+    return [mapping[qid] for qid in ids]
 
 
 def resolve_course(subject):
@@ -159,17 +173,17 @@ class PracticeViewSet(viewsets.GenericViewSet):
             raise ApiException("question_count 必须是整数", code=ErrorCode.INVALID_PARAM, status=400)
 
         if question_count > 0:
-            picked = list(base_qs.order_by("?")[:question_count])
+            picked = _sample_questions(base_qs, question_count)
         elif qtypes:
             # 指定了题型但没给题量：在所选题型内随机抽 DEFAULT_QUESTION_COUNT 道
-            picked = list(base_qs.order_by("?")[:DEFAULT_QUESTION_COUNT])
+            picked = _sample_questions(base_qs, DEFAULT_QUESTION_COUNT)
         else:
             # 未指定任何条件：沿用默认题型配额，某题型不足则有多少抽多少
             picked = []
             for qtype, count in PRACTICE_QTYPE_CONFIG:
-                picked.extend(base_qs.filter(qtype=qtype).order_by("?")[:count])
+                picked.extend(_sample_questions(base_qs.filter(qtype=qtype), count))
             if not picked:
-                picked = list(base_qs.order_by("?")[:DEFAULT_QUESTION_COUNT])
+                picked = _sample_questions(base_qs, DEFAULT_QUESTION_COUNT)
 
         total_score = sum((q.score for q in picked), Decimal("0"))
         subject_display = dict(Paper.SUBJECT_CHOICES)[subject]
