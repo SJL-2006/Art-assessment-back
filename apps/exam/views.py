@@ -8,6 +8,7 @@ from apps.common.response import ApiResponse
 import io
 import os
 import zipfile
+from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import quote
 
@@ -449,6 +450,43 @@ class PaperPublishViewSet(BaseViewSet):
                 paper.status = Paper.STATUS_DRAFT
                 paper.save(update_fields=["status"])
         return ApiResponse(PaperPublishSerializer(publish).data, message="撤回成功")
+
+    @extend_schema(
+        responses={200: PaperPublishSerializer},
+    )
+    @action(detail=True, methods=["post"], url_path="publish")
+    def publish(self, request, pk=None):
+        """重新发布：把已撤回的发布记录恢复为已发布，过期的作答窗口自动顺延。"""
+        publish = self.get_object()
+
+        if publish.status == PaperPublish.STATUS_PUBLISHED:
+            return ApiResponse(PaperPublishSerializer(publish).data, message="当前已是发布状态")
+
+        if publish.status != PaperPublish.STATUS_RECALLED:
+            raise ApiException("当前状态不允许重新发布", status=400)
+
+        now = timezone.now()
+        update_fields = ["status", "updated_at"]
+
+        # 作答窗口已过期时整体平移到当前时间，保持原时长；无开始时间时默认顺延 7 天
+        if publish.end_at is not None and publish.end_at <= now:
+            if publish.start_at is not None:
+                duration = publish.end_at - publish.start_at
+                publish.start_at = now
+                publish.end_at = now + duration
+            else:
+                publish.end_at = now + timedelta(days=7)
+            update_fields += ["start_at", "end_at"]
+
+        with transaction.atomic():
+            publish.status = PaperPublish.STATUS_PUBLISHED
+            publish.save(update_fields=update_fields)
+            paper = publish.paper
+            if paper.status != Paper.STATUS_PUBLISHED:
+                paper.status = Paper.STATUS_PUBLISHED
+                paper.save(update_fields=["status"])
+
+        return ApiResponse(PaperPublishSerializer(publish).data, message="发布成功")
 
 
 class AnswerViewSet(BaseViewSet):
