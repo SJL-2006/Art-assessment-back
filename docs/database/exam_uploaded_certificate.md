@@ -45,3 +45,21 @@
 - `reviewer`：审核人（外键 users_user，可空）
 - `review_comment`：审核意见（可空）
 - `reviewed_at`：审核时间（可空）
+
+---
+
+## 表删除（重命名，2026-11-19）
+
+- **表名**：exam_uploaded_certificate
+- **变更类型**：表删除
+- **SQL 语句**：
+  ```sql
+  RENAME TABLE `exam_uploaded_certificate` TO `exam_student_certificate`;
+  ```
+- **修改日期**：2026-11-19 19:41:40
+- **修改人**：userName
+
+### 变更说明
+
+表重命名为 `exam_student_certificate`，消除与系统证书表 `exam_certificate` 的命名混淆。
+数据随表名自动迁移（1 行），无数据丢失。旧表名不再使用，详见 `exam_student_certificate.md`。

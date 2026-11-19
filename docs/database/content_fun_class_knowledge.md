@@ -31,3 +31,24 @@
 ```sql
 DROP TABLE content_fun_class_knowledge;
 ```
+
+---
+
+## 表删除（2026-11-19）
+
+- **表名**：content_fun_class_knowledge
+- **变更类型**：表删除
+- **SQL 语句**：
+  ```sql
+  DROP TABLE IF EXISTS `content_fun_class_knowledge`;
+  DELETE FROM `django_migrations` WHERE `app` = 'content';
+  DELETE FROM `django_content_type` WHERE `app_label` = 'content';
+  ```
+- **修改日期**：2026-11-19 19:41:40
+- **修改人**：userName
+
+### 变更说明
+
+删除废弃的 `content` app 及其唯一表 `content_fun_class_knowledge`（0 行）。
+该表与 `exam_fun_content` 功能重复，前端无任何调用（前端趣味课堂走 `/exam/fun-contents/`）。
+同步清理迁移记录 `content.0001_initial` 与对应 ContentType 记录。

@@ -22,9 +22,9 @@ from apps.exam.models import (
     AnswerSheet,
     ExtracurricularUpload,
     PerformanceScore,
-    UploadedCertificate,
+    StudentCertificate,
 )
-from apps.exam.serializers import ExtracurricularUploadSerializer, UploadedCertificateSerializer
+from apps.exam.serializers import ExtracurricularUploadSerializer, StudentCertificateSerializer
 from apps.users.models import User
 
 CERT_ALLOWED_TYPES = {"image/jpeg", "image/png"}
@@ -326,7 +326,7 @@ def _teacher_student_ids(teacher):
     )
 
 
-class UploadedCertificateViewSet(
+class StudentCertificateViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
     mixins.DestroyModelMixin,
@@ -334,8 +334,8 @@ class UploadedCertificateViewSet(
 ):
     """学生上传证书：上传 / 我的列表 / 删除（学生），审核（教师）。"""
 
-    queryset = UploadedCertificate.objects.all()
-    serializer_class = UploadedCertificateSerializer
+    queryset = StudentCertificate.objects.all()
+    serializer_class = StudentCertificateSerializer
 
     def get_permissions(self):
         if self.action in ("list", "create", "destroy"):
@@ -343,7 +343,7 @@ class UploadedCertificateViewSet(
         return [has_role(User.ROLE_TEACHER)()]
 
     def get_queryset(self):
-        qs = UploadedCertificate.objects.filter(is_deleted=False).select_related(
+        qs = StudentCertificate.objects.filter(is_deleted=False).select_related(
             "student", "reviewer"
         )
         user = self.request.user
@@ -354,7 +354,7 @@ class UploadedCertificateViewSet(
         return qs
 
     def _serialize(self, records):
-        return UploadedCertificateSerializer(
+        return StudentCertificateSerializer(
             records, many=True, context={"request": self.request}
         ).data
 
@@ -393,14 +393,14 @@ class UploadedCertificateViewSet(
                     "获得日期格式应为 YYYY-MM-DD", ErrorCode.INVALID_PARAM, 400,
                 )
 
-        cert_type = request.data.get("cert_type") or UploadedCertificate.CERT_OTHER
-        if cert_type not in dict(UploadedCertificate.CERT_TYPE_CHOICES):
-            cert_type = UploadedCertificate.CERT_OTHER
-        subject = request.data.get("subject") or UploadedCertificate.SUBJECT_OTHER
-        if subject not in dict(UploadedCertificate.SUBJECT_CHOICES):
-            subject = UploadedCertificate.SUBJECT_OTHER
+        cert_type = request.data.get("cert_type") or StudentCertificate.CERT_OTHER
+        if cert_type not in dict(StudentCertificate.CERT_TYPE_CHOICES):
+            cert_type = StudentCertificate.CERT_OTHER
+        subject = request.data.get("subject") or StudentCertificate.SUBJECT_OTHER
+        if subject not in dict(StudentCertificate.SUBJECT_CHOICES):
+            subject = StudentCertificate.SUBJECT_OTHER
 
-        record = UploadedCertificate.objects.create(
+        record = StudentCertificate.objects.create(
             student=request.user,
             title=title[:128],
             cert_type=cert_type,
@@ -410,7 +410,7 @@ class UploadedCertificateViewSet(
             image=image,
             note=request.data.get("note") or "",
         )
-        data = UploadedCertificateSerializer(record, context={"request": request}).data
+        data = StudentCertificateSerializer(record, context={"request": request}).data
         return ApiResponse(data=data, message="上传成功", status=201)
 
     def destroy(self, request, *args, **kwargs):
@@ -437,11 +437,11 @@ class UploadedCertificateViewSet(
         approved = request.data.get("approved")
         passed = approved in (True, 1, "1", "true", "True")
         record.status = (
-            UploadedCertificate.STATUS_APPROVED if passed else UploadedCertificate.STATUS_REJECTED
+            StudentCertificate.STATUS_APPROVED if passed else StudentCertificate.STATUS_REJECTED
         )
         record.reviewer = request.user
         record.review_comment = request.data.get("comment") or ""
         record.reviewed_at = timezone.now()
         record.save(update_fields=["status", "reviewer", "review_comment", "reviewed_at", "updated_at"])
-        data = UploadedCertificateSerializer(record, context={"request": request}).data
+        data = StudentCertificateSerializer(record, context={"request": request}).data
         return ApiResponse(data=data, message="审核通过" if passed else "已驳回")

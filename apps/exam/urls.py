@@ -45,9 +45,9 @@ except AttributeError:
     log.warning("exam.views.FunContentViewSet 尚未实现，fun-contents 路由未注册")
 
 try:
-    router.register("cert-uploads", student_views.UploadedCertificateViewSet, basename="cert_upload")
+    router.register("cert-uploads", student_views.StudentCertificateViewSet, basename="cert_upload")
 except AttributeError:
-    log.warning("exam.student_views.UploadedCertificateViewSet 尚未实现，cert-uploads 路由未注册")
+    log.warning("exam.student_views.StudentCertificateViewSet 尚未实现，cert-uploads 路由未注册")
 
 urlpatterns = [
     # 年级字典（测评发布等下拉使用）

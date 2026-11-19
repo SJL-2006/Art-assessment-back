@@ -12,7 +12,7 @@ from apps.exam.models import (
     PaperPublish,
     PaperQuestion,
     PerformanceScore,
-    UploadedCertificate,
+    StudentCertificate,
 )
 from apps.classroom.models import APPROVED, ClassRoom, ClassStudent
 from apps.exam.models import Answer, AnswerSheet, Certificate, Paper, PaperPublish, PaperQuestion
@@ -261,7 +261,7 @@ class FunContentSerializer(serializers.ModelSerializer):
         return obj.target_class.name if obj.target_class else ""
 
 
-class UploadedCertificateSerializer(serializers.ModelSerializer):
+class StudentCertificateSerializer(serializers.ModelSerializer):
     """学生上传证书（含展示字段）。"""
 
     cert_type_display = serializers.CharField(source="get_cert_type_display", read_only=True)
@@ -272,7 +272,7 @@ class UploadedCertificateSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
 
     class Meta:
-        model = UploadedCertificate
+        model = StudentCertificate
         fields = [
             "id",
             "title",

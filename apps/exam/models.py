@@ -239,8 +239,8 @@ class Certificate(BaseModel):
         return self.title
 
 
-class UploadedCertificate(BaseModel):
-    """学生上传证书（待教师审核）。"""
+class StudentCertificate(BaseModel):
+    """学生证书（学生上传，待教师审核）。"""
 
     CERT_EXAM = "exam"
     CERT_COMPETITION = "competition"
@@ -275,7 +275,7 @@ class UploadedCertificate(BaseModel):
 
     student = models.ForeignKey(
         "users.User", on_delete=models.CASCADE,
-        related_name="uploaded_certificates", verbose_name="上传学生",
+        related_name="student_certificates", verbose_name="学生",
     )
     title = models.CharField("证书标题", max_length=128)
     cert_type = models.CharField(
@@ -299,9 +299,9 @@ class UploadedCertificate(BaseModel):
     reviewed_at = models.DateTimeField("审核时间", null=True, blank=True)
 
     class Meta:
-        db_table = "exam_uploaded_certificate"
-        verbose_name = "学生上传证书"
-        verbose_name_plural = "学生上传证书"
+        db_table = "exam_student_certificate"
+        verbose_name = "学生证书"
+        verbose_name_plural = "学生证书"
         ordering = ["-created_at"]
 
     def __str__(self):
