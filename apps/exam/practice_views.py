@@ -57,15 +57,28 @@ def _as_list(value):
     return [part.strip() for part in text.split(",") if part.strip()]
 
 
-def resolve_course(subject):
-    """把 Paper.subject（music/art）映射到 questionbank.Course。"""
-    course = Course.objects.filter(code=subject).first()
-    if course is None:
-        name = SUBJECT_TO_COURSE_NAME.get(subject)
-        course = Course.objects.filter(name=name).first() if name else None
-    if course is None:
+def _subject_questions(subject):
+    """按学科代码聚合题目（同一学科可能拆成多条 code 相同的课程，如多个音乐课程 code 均为 music）。
+
+    按 course.code 聚合而非取单个课程，避免 .first() 抽到题量为 0 或年级不匹配的那条。
+    code 为空的历史课程退回按中文课程名匹配；两者都无课程时才抛 404。
+    """
+    qs = Question.objects.filter(course__code=subject, is_deleted=False)
+    name = SUBJECT_TO_COURSE_NAME.get(subject)
+
+    if not qs.exists() and name:
+        course_ids = list(
+            Course.objects.filter(name=name, is_deleted=False).values_list("id", flat=True)
+        )
+        if course_ids:
+            qs = Question.objects.filter(course_id__in=course_ids, is_deleted=False)
+
+    has_code_course = Course.objects.filter(code=subject, is_deleted=False).exists()
+    has_name_course = bool(name) and Course.objects.filter(name=name, is_deleted=False).exists()
+    if not has_code_course and not has_name_course:
         raise ApiException(f"未找到学科对应的课程：{subject}", code=ErrorCode.NOT_FOUND, status=404)
-    return course
+
+    return qs
 
 
 def _random_sample(queryset, count):
@@ -115,8 +128,7 @@ class PracticeViewSet(viewsets.GenericViewSet):
         if subject not in (Paper.SUBJECT_MUSIC, Paper.SUBJECT_ART):
             raise ApiException("subject 仅支持 music / art", code=ErrorCode.INVALID_PARAM, status=400)
 
-        course = resolve_course(subject)
-        base_qs = Question.objects.filter(course=course, status=Question.STATUS_APPROVED)
+        base_qs = _subject_questions(subject).filter(status=Question.STATUS_APPROVED)
 
         # ---- 题型 / 难度 / 章节 过滤 ----
         qtypes = _as_list(request.data.get("qtypes"))
@@ -150,13 +162,27 @@ class PracticeViewSet(viewsets.GenericViewSet):
                 grade = ""
         else:
             grade = services.student_grade(request.user)
-        if grade:
-            base_qs = base_qs.filter(grade=grade)
 
-        available_count = base_qs.count()
+        # 年级逐级降级：班级年级精确过滤无题时，放弃年级条件以保底组卷
+        grade_relaxed = False
+        final_qs = base_qs
+        if grade:
+            grade_qs = base_qs.filter(grade=grade)
+            if grade_qs.count() == 0:
+                final_qs = base_qs
+                grade_relaxed = True
+            else:
+                final_qs = grade_qs
+
+        available_count = final_qs.count()
         if available_count == 0:
+            qtype_label = "、".join(dict(Question.TYPE_CHOICES).get(q, q) for q in qtypes) or "全部"
+            difficulty_label = "、".join(dict(Question.DIFFICULTY_CHOICES).get(d, d) for d in difficulties) or "全部"
+            approved_total = _subject_questions(subject).filter(status=Question.STATUS_APPROVED).count()
             raise ApiException(
-                "题库中没有符合条件（学科/题型/难度/年级）的试题，无法组卷",
+                f"题库中没有符合条件的试题（学科：{dict(Paper.SUBJECT_CHOICES)[subject]}；"
+                f"题型：{qtype_label}；难度：{difficulty_label}；年级：{grade or '不限'}）；"
+                f"该学科已通过试题共 {approved_total} 道",
                 code=ErrorCode.INVALID_PARAM, status=400,
             )
 
@@ -168,15 +194,15 @@ class PracticeViewSet(viewsets.GenericViewSet):
             raise ApiException("question_count 必须是整数", code=ErrorCode.INVALID_PARAM, status=400)
 
         if question_count > 0:
-            picked = _random_sample(base_qs, question_count)
+            picked = _random_sample(final_qs, question_count)
         elif qtypes:
-            picked = _random_sample(base_qs, DEFAULT_QUESTION_COUNT)
+            picked = _random_sample(final_qs, DEFAULT_QUESTION_COUNT)
         else:
             picked = []
             for qtype, count in PRACTICE_QTYPE_CONFIG:
-                picked.extend(_random_sample(base_qs.filter(qtype=qtype), count))
+                picked.extend(_random_sample(final_qs.filter(qtype=qtype), count))
             if not picked:
-                picked = _random_sample(base_qs, DEFAULT_QUESTION_COUNT)
+                picked = _random_sample(final_qs, DEFAULT_QUESTION_COUNT)
 
         random.shuffle(picked)
 
@@ -223,6 +249,7 @@ class PracticeViewSet(viewsets.GenericViewSet):
                 "qtypes": qtypes,
                 "difficulties": difficulties,
                 "grade": grade,
+                "grade_relaxed": grade_relaxed,
             },
         }
         return ApiResponse(data=data, message="组卷成功", status=201)
