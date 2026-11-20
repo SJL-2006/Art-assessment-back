@@ -102,7 +102,6 @@ class MeAvatarView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
-    ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
     MAX_SIZE = 2 * 1024 * 1024  # 2MB
 
     @extend_schema(responses={200: None})
@@ -110,8 +109,8 @@ class MeAvatarView(APIView):
         upload = request.FILES.get("avatar")
         if upload is None:
             raise ApiException("缺少头像文件", code=ErrorCode.INVALID_PARAM, status=400)
-        if upload.content_type not in self.ALLOWED_TYPES:
-            raise ApiException("仅支持 JPG / PNG / WEBP", code=ErrorCode.INVALID_PARAM, status=400)
+        if not (upload.content_type or "").startswith("image/"):
+            raise ApiException("仅支持图片文件（JPG / PNG / WEBP）", code=ErrorCode.INVALID_PARAM, status=400)
         if upload.size > self.MAX_SIZE:
             raise ApiException("图片不能超过 2MB", code=ErrorCode.INVALID_PARAM, status=400)
         try:
@@ -125,7 +124,7 @@ class MeAvatarView(APIView):
             user.avatar.delete(save=False)
         user.avatar = upload
         user.save(update_fields=["avatar"])
-        return ApiResponse({"avatar": request.build_absolute_uri(user.avatar.url)})
+        return ApiResponse({"avatar": user.avatar.url})
 
     @extend_schema(responses={200: None})
     def delete(self, request):

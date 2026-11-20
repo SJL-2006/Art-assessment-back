@@ -41,6 +41,7 @@ class LoginSerializer(TokenObtainPairSerializer):
 class UserSerializer(serializers.ModelSerializer):
     """用户通用序列化器。"""
     role_display = serializers.CharField(source="get_role_display", read_only=True)
+    avatar = serializers.SerializerMethodField()
     school_name = serializers.SerializerMethodField()
     school_code = serializers.SerializerMethodField()
     region_name = serializers.SerializerMethodField()
@@ -55,6 +56,10 @@ class UserSerializer(serializers.ModelSerializer):
             "region", "region_name", "classes", "class_name", "email", "date_joined",
         ]
         read_only_fields = ["id", "username", "role", "date_joined"]
+
+    # ---- 展示字段：头像返回相对路径，避免 HTTPS 反向代理下出现混合内容 ----
+    def get_avatar(self, obj):
+        return obj.avatar.url if obj.avatar else None
 
     # ---- 展示字段：个人信息页需要学校名/学校编号/所在班级 ----
     def get_school_name(self, obj):

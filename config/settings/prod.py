@@ -24,5 +24,6 @@ CORS_ALLOWED_ORIGINS = [
     o.strip() for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
 ]
 
-# Nginx 反向代理 HTTPS 时，告知 Django 请求是 HTTPS
+# Nginx 反向代理 HTTPS 时，告知 Django 请求是 HTTPS 并信任转发的主机名
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
