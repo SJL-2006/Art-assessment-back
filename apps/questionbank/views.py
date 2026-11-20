@@ -80,7 +80,8 @@ class QuestionViewSet(BaseViewSet):
             return [has_role(User.ROLE_QB_ADMIN)()]
         if self.action in ("list", "retrieve", "stats"):
             return [has_role(*QUESTION_READ_ROLES)()]
-        return [has_role(User.ROLE_TEACHER, User.ROLE_QB_ADMIN)()]
+        # 教师与各管理端都可提交试题改动，但非题库管理员需走审核
+        return [has_role(User.ROLE_TEACHER, User.ROLE_QB_ADMIN, *MANAGEMENT_ROLES)()]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -112,9 +113,19 @@ class QuestionViewSet(BaseViewSet):
             qs = qs.filter(course__code=code)
         return qs
 
+    def _submitted_status(self):
+        """题库管理员提交直接生效，其他端（教师/省/市/区县/学校）提交进入待审核。"""
+        if self.request.user.role == User.ROLE_QB_ADMIN:
+            return Question.STATUS_APPROVED
+        return Question.STATUS_PENDING
+
     def perform_create(self, serializer):
-        """创建试题时记录创建人，供「创建人」列与分类筛选使用。"""
-        serializer.save(creator=self.request.user)
+        """创建试题时记录创建人，并按提交端决定是否需要审核。"""
+        serializer.save(creator=self.request.user, status=self._submitted_status())
+
+    def perform_update(self, serializer):
+        """修改试题后按提交端决定是否需要重新审核。"""
+        serializer.save(status=self._submitted_status())
 
     @extend_schema(
         request=QuestionResourceSerializer,
