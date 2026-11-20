@@ -98,6 +98,13 @@ class QuestionViewSet(BaseViewSet):
             value = params.get(param)
             if value:
                 qs = qs.filter(**{field: value})
+        # 「我的题目」：creator=me 返回当前登录账号创建的题（也兼容直接传用户 ID）
+        creator = params.get("creator")
+        if creator:
+            if creator == "me":
+                qs = qs.filter(creator=self.request.user)
+            elif str(creator).isdigit():
+                qs = qs.filter(creator_id=int(creator))
         # 「创建人」分类筛选：管理员（题库管理员/省级）或教师
         creator_role = params.get("creator_role")
         if creator_role in ("管理员", "admin", "qb_admin"):
