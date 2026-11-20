@@ -77,6 +77,7 @@ def _summary(sheets, students):
     student_total = students.count()
     return {
         "student_total": student_total,
+        "expected_count": student_total,
         "participant_count": len(participant_ids),
         "submission_count": total,
         "participation_rate": round(len(participant_ids) / student_total, 4) if student_total else 0,
@@ -150,6 +151,17 @@ def _build_stats(request):
                        lambda r: r["student__school__region__name"] or "未填地区")
     by_city = _group(rows, lambda r: r["student__school__region__parent__name"] or "未填市州",
                      lambda r: r["student__school__region__parent__name"] or "未填市州")
+    # 市州应参与学生数，供前端计算参与率（参与人数 / 应参与人数）
+    expected_by_city = {
+        row["school__region__parent__name"] or "未填市州": row["total"]
+        for row in students.values("school__region__parent__name").annotate(total=Count("id"))
+    }
+    for item in by_city:
+        expected = expected_by_city.get(item["label"], 0)
+        item["expected_count"] = expected
+        item["participation_rate"] = (
+            round(item["participant_count"] / expected, 4) if expected else 0
+        )
     return {
         "summary": summary,
         "by_subject": by_subject,
