@@ -308,6 +308,130 @@ class StudentCertificate(BaseModel):
         return self.title
 
 
+class BackfillRequest(BaseModel):
+    """测评补录申请 / 记录台账。"""
+
+    STATUS_PENDING = "pending"
+    STATUS_VERIFIED = "verified"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "待教师核实"),
+        (STATUS_VERIFIED, "待学校入账"),
+        (STATUS_APPROVED, "已入账"),
+        (STATUS_REJECTED, "已驳回"),
+        (STATUS_CANCELLED, "已撤回"),
+    ]
+
+    SOURCE_STUDENT = "student"
+    SOURCE_TEACHER = "teacher"
+    SOURCE_SCHOOL = "school"
+    SOURCE_DISTRICT = "district"
+    SOURCE_CITY = "city"
+    SOURCE_PROVINCE = "province"
+    SOURCE_CHOICES = [
+        (SOURCE_STUDENT, "学生申请"),
+        (SOURCE_TEACHER, "教师补录"),
+        (SOURCE_SCHOOL, "学校补录"),
+        (SOURCE_DISTRICT, "区县补录"),
+        (SOURCE_CITY, "市州补录"),
+        (SOURCE_PROVINCE, "省级补录"),
+    ]
+
+    code = models.CharField("补录编号", max_length=32, unique=True)
+    status = models.CharField(
+        "状态", max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING,
+    )
+    source_role = models.CharField("来源角色", max_length=16, choices=SOURCE_CHOICES)
+    student = models.ForeignKey(
+        "users.User", on_delete=models.CASCADE,
+        related_name="backfill_requests", verbose_name="学生",
+    )
+    student_no = models.CharField("学籍号快照", max_length=32, blank=True, default="")
+    school = models.ForeignKey(
+        "org.School", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="backfill_requests", verbose_name="所属学校",
+    )
+    klass = models.ForeignKey(
+        "classroom.ClassRoom", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="backfill_requests", verbose_name="所属班级",
+    )
+    subject = models.CharField("学科", max_length=8, choices=Paper.SUBJECT_CHOICES)
+    paper_name = models.CharField("测评名称", max_length=128)
+    exam_date = models.DateField("测评日期")
+    score = models.DecimalField(
+        "补录成绩", max_digits=5, decimal_places=1, null=True, blank=True,
+    )
+    reason = models.CharField("补录原因", max_length=64)
+    detail = models.TextField("情况说明", blank=True, default="")
+    reject_reason = models.CharField("驳回原因", max_length=255, blank=True, default="")
+    created_by = models.ForeignKey(
+        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="created_backfill_requests", verbose_name="发起人",
+    )
+    verified_by = models.ForeignKey(
+        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="verified_backfill_requests", verbose_name="核实人",
+    )
+    verified_at = models.DateTimeField("核实时间", null=True, blank=True)
+    approved_by = models.ForeignKey(
+        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="approved_backfill_requests", verbose_name="入账人",
+    )
+    approved_at = models.DateTimeField("入账时间", null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="rejected_backfill_requests", verbose_name="驳回人",
+    )
+    rejected_at = models.DateTimeField("驳回时间", null=True, blank=True)
+    score_record_id = models.BigIntegerField("成绩记录ID", null=True, blank=True)
+
+    class Meta:
+        db_table = "exam_backfill_request"
+        verbose_name = "测评补录记录"
+        verbose_name_plural = "测评补录记录"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["school"]),
+            models.Index(fields=["klass"]),
+            models.Index(fields=["student"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["school", "status"]),
+            models.Index(fields=["klass", "status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.code} {self.paper_name}"
+
+
+class BackfillEvent(models.Model):
+    """测评补录流转日志（对应前端 timeline）。"""
+
+    backfill = models.ForeignKey(
+        BackfillRequest, on_delete=models.CASCADE,
+        related_name="events", verbose_name="补录记录",
+    )
+    action = models.CharField("动作", max_length=64)
+    actor = models.ForeignKey(
+        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="backfill_events", verbose_name="操作人",
+    )
+    actor_role = models.CharField("操作角色", max_length=16)
+    note = models.CharField("备注", max_length=255, blank=True, default="")
+    created_at = models.DateTimeField("发生时间", auto_now_add=True)
+
+    class Meta:
+        db_table = "exam_backfill_event"
+        verbose_name = "测评补录日志"
+        verbose_name_plural = "测评补录日志"
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return f"{self.backfill_id} {self.action}"
+
+
 class FunContent(BaseModel):
     """趣味课堂内容（省级发布，学生可见）。"""
 

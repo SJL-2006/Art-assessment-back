@@ -12,6 +12,7 @@ from rest_framework.routers import DefaultRouter
 
 from apps.exam import (
     answer_views,
+    backfill_views,
     certificate_views,
     practice_views,
     score_views,
@@ -90,6 +91,38 @@ urlpatterns = [
         "my-class/assessments/",
         student_views.MyClassAssessmentView.as_view(),
         name="my_class_assessments",
+    ),
+    # 测评补录台账（B01-B12）
+    path("backfills/", backfill_views.BackfillListCreateView.as_view(), name="backfill_list"),
+    path("backfills/stats/", backfill_views.BackfillStatsView.as_view(), name="backfill_stats"),
+    path("backfills/options/", backfill_views.BackfillOptionsView.as_view(), name="backfill_options"),
+    path("backfills/export/", backfill_views.BackfillExportView.as_view(), name="backfill_export"),
+    path("backfills/direct/", backfill_views.BackfillDirectView.as_view(), name="backfill_direct"),
+    path("backfills/<int:pk>/", backfill_views.BackfillDetailView.as_view(), name="backfill_detail"),
+    path(
+        "backfills/<int:pk>/verify/",
+        backfill_views.BackfillVerifyView.as_view(),
+        name="backfill_verify",
+    ),
+    path(
+        "backfills/<int:pk>/score/",
+        backfill_views.BackfillScoreView.as_view(),
+        name="backfill_score",
+    ),
+    path(
+        "backfills/<int:pk>/approve/",
+        backfill_views.BackfillApproveView.as_view(),
+        name="backfill_approve",
+    ),
+    path(
+        "backfills/<int:pk>/reject/",
+        backfill_views.BackfillRejectView.as_view(),
+        name="backfill_reject",
+    ),
+    path(
+        "backfills/<int:pk>/withdraw/",
+        backfill_views.BackfillWithdrawView.as_view(),
+        name="backfill_withdraw",
     ),
     # 数据统计
     path("stats/assessment/", stats_views.StatsAssessmentView.as_view(), name="stats_assessment"),
