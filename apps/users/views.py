@@ -1,15 +1,17 @@
 """用户与认证相关视图。"""
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema
+from PIL import Image
 from rest_framework import generics, permissions
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.views import APIView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.classroom.models import APPROVED, ClassRoom, ClassTeacher
 from apps.common.exceptions import ApiException
-from apps.common.response import ApiResponse
+from apps.common.response import ApiResponse, ErrorCode
 from apps.users.models import User
 from apps.users.serializers import ChangePasswordSerializer, RegisterSerializer, UserSerializer
 
@@ -70,7 +72,7 @@ class CurrentUserView(APIView):
 
     @extend_schema(responses={200: UserSerializer})
     def get(self, request):
-        data = UserSerializer(request.user).data
+        data = UserSerializer(request.user, context={"request": request}).data
         if request.user.role == User.ROLE_TEACHER:
             data["head_class_count"] = ClassRoom.objects.filter(
                 head_teacher=request.user, is_deleted=False,
@@ -86,10 +88,53 @@ class CurrentUserView(APIView):
         return ApiResponse(data)
 
     def put(self, request):
-        ser = UserSerializer(request.user, data=request.data, partial=True)
+        ser = UserSerializer(
+            request.user, data=request.data, partial=True, context={"request": request},
+        )
         ser.is_valid(raise_exception=True)
         ser.save()
         return ApiResponse(ser.data, message="个人信息修改成功")
+
+
+class MeAvatarView(APIView):
+    """当前登录用户头像：POST 上传 / DELETE 重置。"""
+
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
+    MAX_SIZE = 2 * 1024 * 1024  # 2MB
+
+    @extend_schema(responses={200: None})
+    def post(self, request):
+        upload = request.FILES.get("avatar")
+        if upload is None:
+            raise ApiException("缺少头像文件", code=ErrorCode.INVALID_PARAM, status=400)
+        if upload.content_type not in self.ALLOWED_TYPES:
+            raise ApiException("仅支持 JPG / PNG / WEBP", code=ErrorCode.INVALID_PARAM, status=400)
+        if upload.size > self.MAX_SIZE:
+            raise ApiException("图片不能超过 2MB", code=ErrorCode.INVALID_PARAM, status=400)
+        try:
+            Image.open(upload).verify()
+        except Exception:
+            raise ApiException("文件不是有效图片", code=ErrorCode.INVALID_PARAM, status=400)
+        upload.seek(0)
+
+        user = request.user
+        if user.avatar:
+            user.avatar.delete(save=False)
+        user.avatar = upload
+        user.save(update_fields=["avatar"])
+        return ApiResponse({"avatar": request.build_absolute_uri(user.avatar.url)})
+
+    @extend_schema(responses={200: None})
+    def delete(self, request):
+        user = request.user
+        if user.avatar:
+            user.avatar.delete(save=False)
+            user.avatar = ""
+            user.save(update_fields=["avatar"])
+        return ApiResponse({"avatar": None})
 
 
 class ChangePasswordView(APIView):
