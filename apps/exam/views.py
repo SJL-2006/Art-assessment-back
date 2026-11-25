@@ -515,8 +515,8 @@ class AnswerViewSet(BaseViewSet):
         answer: Answer = self.get_object()
         question: Question = answer.question
 
-        # 仅对主观题进行 AI 评分
-        subjective_types = {"short", "listening", "sight"}
+        # 题型已收敛为客观题（单选/多选/判断），暂无主观题可 AI 评分
+        subjective_types = set()
         if question.qtype not in subjective_types:
             raise ApiException(
                 f"题型 {question.get_qtype_display()} 非主观题，跳过 AI 评分",
@@ -567,7 +567,8 @@ class AnswerViewSet(BaseViewSet):
 
         answers = self.queryset.filter(sheet_id=sheet_id).select_related("question")
         save = request.data.get("save", True)
-        subjective_types = {"short", "listening", "sight"}
+        # 题型已收敛为客观题（单选/多选/判断），暂无主观题可 AI 评分
+        subjective_types = set()
 
         results = []
         for ans in answers:

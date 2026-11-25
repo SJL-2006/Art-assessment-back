@@ -286,7 +286,7 @@ class QuestionResourceViewSet(BaseViewSet):
 
 
 class QuestionTypeOptionsView(APIView):
-    """GET /api/questionbank/question-types/ 题型字典（组卷/题库下拉使用，含填空题）。"""
+    """GET /api/questionbank/question-types/ 题型字典（组卷/题库下拉使用，仅选择题与判断题）。"""
 
     permission_classes = [has_role(*QUESTION_READ_ROLES)]
 

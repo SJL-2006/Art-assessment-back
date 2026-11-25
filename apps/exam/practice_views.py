@@ -38,7 +38,6 @@ PRACTICE_QTYPE_CONFIG = [
     ("single", 5),
     ("multiple", 2),
     ("judge", 3),
-    ("fill", 2),
 ]
 
 # 未指定题量时的兜底抽取数量

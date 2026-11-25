@@ -17,7 +17,7 @@ from apps.questionbank.models import Chapter, Course, Question
 from apps.users.models import User
 
 # 题目元组格式：(章节, 题型, 难度, 年级, 题干, 选项, 答案, 解析, 分值)
-# 题型：single 单选 / judge 判断 / fill 填空；判断与填空题的选项传空列表 []。
+# 题型：single 单选 / judge 判断；判断题的选项传空列表 []。
 
 # ------------------------- 初中音乐（七年级~九年级） -------------------------
 JUNIOR_MUSIC_QUESTIONS = [

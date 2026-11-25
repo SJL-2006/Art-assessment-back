@@ -22,7 +22,7 @@ from apps.users.models import User
 # 已通过审核的班级关系状态
 APPROVED = "approved"
 # 可自动判分的客观题题型
-OBJECTIVE_TYPES = {"single", "multiple", "judge", "fill"}
+OBJECTIVE_TYPES = {"single", "multiple", "judge"}
 # 及格线（60%）
 PASS_RATIO = Decimal("0.6")
 
@@ -224,10 +224,6 @@ def grade_one(qtype, correct_answer, given_answer, full_score):
         elif given in _JUDGE_FALSE:
             given = "false"
         ok = correct == given
-    elif qtype == "fill":
-        ok = _normalize(correct_answer) == _normalize(given_answer) or (
-            _tokens(correct_answer) == _tokens(given_answer)
-        )
     else:
         ok = _normalize(correct_answer) == _normalize(given_answer)
     return ok, (full if ok else Decimal("0"))
