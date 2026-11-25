@@ -9,6 +9,9 @@ jobs:
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-backend
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
@@ -18,9 +21,6 @@ jobs:
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          ssh-known-hosts: |
-            github.com
-            47.108.200.73
 
       - name: Fix file permissions (Windows LF→CRLF)
         run: |
@@ -32,6 +32,7 @@ jobs:
       - name: Sync deploy script to server
         run: |
           scp \
+            -P ${{ secrets.SSH_PORT || 22 }} \
             -o StrictHostKeyChecking=no \
             deploy.sh \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/deploy.sh
@@ -39,10 +40,11 @@ jobs:
       - name: Execute deploy on server
         run: |
           ssh \
+            -p ${{ secrets.SSH_PORT || 22 }} \
             -o StrictHostKeyChecking=no \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "sudo bash /tmp/deploy.sh"
 
       - name: Verify
         run: |
-          curl -s -w "\nHTTP %{http_code}" http://47.108.200.73/api/schema/ | tail -5
+          curl -s -w "\nHTTP %{http_code}" http://${{ secrets.SSH_HOST }}/api/schema/ | tail -5
