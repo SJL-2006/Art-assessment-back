@@ -247,10 +247,12 @@ HIGH_ART_QUESTIONS = [
 ]
 
 # 课程块：(课程名, 课程代码, 题目列表)
+# code 必须与「音乐/美术」学科归并规则一致：音乐类一律 "music"、美术类一律 "art"，
+# 前端按 course__code 做学科筛选，code 写错会导致新题在「音乐/美术」筛选中抽不到。
 COURSE_BLOCKS = [
-    ("初中音乐", "music_junior", JUNIOR_MUSIC_QUESTIONS),
-    ("初中美术", "art_junior", JUNIOR_ART_QUESTIONS),
-    ("高中美术", "art_senior", HIGH_ART_QUESTIONS),
+    ("初中音乐", "music", JUNIOR_MUSIC_QUESTIONS),
+    ("初中美术", "art", JUNIOR_ART_QUESTIONS),
+    ("高中美术", "art", HIGH_ART_QUESTIONS),
 ]
 
 
