@@ -2,11 +2,13 @@
 
 前端顶部搜索框调这一个接口，返回分组好的结果。
 """
+from django.db.models import Q
 from rest_framework.views import APIView
 
-from apps.classroom.models import ClassRoom
+from apps.classroom.models import APPROVED, ClassRoom, ClassStudent
 from apps.common.permissions import has_role
 from apps.common.response import ApiResponse
+from apps.exam import services
 from apps.exam.models import Paper
 from apps.users.models import User
 
@@ -22,6 +24,13 @@ class GlobalSearchView(APIView):
     返回：{ classrooms: [...], papers: [...], students: [...] }
     每类都最多返回 30 条，避免大结果集。
     """
+
+    permission_classes = [
+        has_role(
+            User.ROLE_TEACHER, User.ROLE_SCHOOL, User.ROLE_DISTRICT,
+            User.ROLE_CITY, User.ROLE_PROVINCE, User.ROLE_QB_ADMIN,
+        )
+    ]
 
     def get(self, request):
         user = request.user
@@ -41,27 +50,68 @@ class GlobalSearchView(APIView):
 
         result = {"classrooms": [], "papers": [], "students": []}
 
-        # 权限过滤：教师只能搜自己所带班级相关的，学校 admin 可以搜全校
-        is_teacher = has_role(user, User.ROLE_TEACHER)
-        # 管理员角色：学校 / 区县 / 市 / 省 / 题库管理员 都视为可搜全校
-        is_admin = has_role(
-            user,
+        # 权限判定：按真实角色判断（has_role 返回的是权限类，不能当布尔值用）
+        is_teacher = user.role == User.ROLE_TEACHER
+        is_admin = user.role in (
             User.ROLE_SCHOOL, User.ROLE_DISTRICT, User.ROLE_CITY,
             User.ROLE_PROVINCE, User.ROLE_QB_ADMIN,
         )
 
+        def scope_classrooms(qs):
+            if user.is_superuser or user.role in (User.ROLE_PROVINCE, User.ROLE_QB_ADMIN):
+                return qs
+            if user.role == User.ROLE_CITY:
+                return qs.filter(school__region_id__in=services.visible_region_ids(user))
+            if user.role == User.ROLE_DISTRICT:
+                return qs.filter(school__region_id=user.region_id)
+            if user.role == User.ROLE_SCHOOL:
+                return qs.filter(school_id=user.school_id)
+            # 教师只能搜自己带的班级（班主任 or 科任）
+            return qs.filter(Q(head_teacher=user) | Q(teachers__teacher=user)).distinct()
+
+        def scope_papers(qs):
+            if user.is_superuser or user.role in (User.ROLE_PROVINCE, User.ROLE_QB_ADMIN):
+                return qs
+            if user.role == User.ROLE_CITY:
+                return qs.filter(creator__school__region_id__in=services.visible_region_ids(user))
+            if user.role == User.ROLE_DISTRICT:
+                return qs.filter(creator__school__region_id=user.region_id)
+            if user.role == User.ROLE_SCHOOL:
+                return qs.filter(creator__school_id=user.school_id)
+            # 教师只看自己创建的
+            return qs.filter(creator=user)
+
+        def scope_students(qs):
+            if user.is_superuser or user.role in (User.ROLE_PROVINCE, User.ROLE_QB_ADMIN):
+                return qs
+            if user.role == User.ROLE_CITY:
+                return qs.filter(school__region_id__in=services.visible_region_ids(user))
+            if user.role == User.ROLE_DISTRICT:
+                return qs.filter(school__region_id=user.region_id)
+            if user.role == User.ROLE_SCHOOL:
+                return qs.filter(school_id=user.school_id)
+            # 教师 → 所带班级中已通过审核的学生
+            class_ids = list(
+                ClassRoom.objects.filter(
+                    Q(head_teacher=user) | Q(teachers__teacher=user),
+                    is_deleted=False,
+                ).values_list("id", flat=True).distinct()
+            )
+            if not class_ids:
+                return User.objects.none()
+            allowed_ids = set(
+                ClassStudent.objects.filter(
+                    klass_id__in=class_ids, status=APPROVED, is_deleted=False,
+                ).values_list("student_id", flat=True)
+            )
+            return qs.filter(id__in=allowed_ids)
+
         if "classroom" in scopes:
-            from django.db.models import Q
             qs = ClassRoom.objects.filter(
                 is_deleted=False,
                 name__icontains=q,
             ).order_by("name")
-            if is_teacher:
-                # 教师只能搜自己带的班级（班主任 or 科任）
-                # teachers 是 ClassTeacher related_name，中间表再通过 teacher 关联到 User
-                qs = qs.filter(
-                    Q(head_teacher=user) | Q(teachers__teacher=user),
-                ).distinct()
+            qs = scope_classrooms(qs)
             result["classrooms"] = [
                 {
                     "id": c.id,
@@ -69,7 +119,7 @@ class GlobalSearchView(APIView):
                     "code": c.code,
                     "grade": c.grade or "",
                     "school_name": c.school.name if c.school else "",
-                    "student_count": c.students.filter(is_deleted=False, status="approved").count(),
+                    "student_count": c.students.filter(is_deleted=False, status=APPROVED).count(),
                     "head_teacher_name": c.head_teacher.real_name or c.head_teacher.username if c.head_teacher else "",
                 }
                 for c in qs[:30]
@@ -82,9 +132,7 @@ class GlobalSearchView(APIView):
             ).select_related("creator").order_by("-created_at")
             if subject in ("music", "art"):
                 qs = qs.filter(subject=subject)
-            # 教师只看自己创建的 / 所带班级涉及的
-            if is_teacher:
-                qs = qs.filter(creator=user)
+            qs = scope_papers(qs)
             result["papers"] = [
                 {
                     "id": p.id,
@@ -103,8 +151,6 @@ class GlobalSearchView(APIView):
             ]
 
         if "student" in scopes and (is_teacher or is_admin):
-            # 教师/学校可以搜学生
-            from apps.classroom.models import ClassStudent
             stu_qs = User.objects.filter(
                 role=User.ROLE_STUDENT,
             ).filter(
@@ -117,37 +163,17 @@ class GlobalSearchView(APIView):
                 student_no__icontains=q,
             )
             stu_qs = stu_qs.distinct().order_by("real_name", "username")
-            if is_teacher:
-                # 限制为教师所带班级中的学生
-                from django.db.models import Q
-                class_ids = list(
-                    ClassRoom.objects.filter(
-                        Q(head_teacher=user) | Q(teachers__teacher=user),
-                        is_deleted=False,
-                    ).values_list("id", flat=True).distinct()
-                )
-                if class_ids:
-                    allowed_stu_ids = set(
-                        ClassStudent.objects.filter(
-                            klass_id__in=class_ids,
-                            status="approved",
-                            is_deleted=False,
-                        ).values_list("student_id", flat=True)
-                    )
-                    stu_qs = stu_qs.filter(id__in=allowed_stu_ids)
-                else:
-                    stu_qs = User.objects.none()
+            stu_qs = scope_students(stu_qs)
             result["students"] = [
                 {
                     "id": s.id,
                     "name": s.real_name or s.username,
                     "username": s.username,
                     "student_no": s.student_no or "",
-                    "grade": s.grade or "",
                     "class_names": list(
                         ClassRoom.objects.filter(
                             students__student=s,
-                            students__status="approved",
+                            students__status=APPROVED,
                             students__is_deleted=False,
                             is_deleted=False,
                         ).values_list("name", flat=True)

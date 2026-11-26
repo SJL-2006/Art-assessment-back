@@ -35,6 +35,10 @@ class MyAssessmentViewSet(viewsets.GenericViewSet):
 
     def _item(self, publish, sheet=None):
         paper = publish.paper
+        # 列表查询已用 Count 注解 _qcount，避免逐条 count 造成 N+1
+        qcount = getattr(publish, "_qcount", None)
+        if qcount is None:
+            qcount = paper.paper_questions.count()
         return {
             "id": publish.id,
             "paper_id": paper.id,
@@ -46,7 +50,7 @@ class MyAssessmentViewSet(viewsets.GenericViewSet):
             "grade": paper.grade,
             "duration": paper.duration,
             "total_score": str(paper.total_score),
-            "question_count": paper.paper_questions.count(),
+            "question_count": qcount,
             "start_at": publish.start_at,
             "end_at": publish.end_at,
             "sheet_id": sheet.id if sheet else None,
@@ -56,7 +60,11 @@ class MyAssessmentViewSet(viewsets.GenericViewSet):
 
     def list(self, request):
         """我可作答的测评列表（按发布范围与时间过滤）。"""
-        publishes = list(services.available_publishes(request.user).order_by("-created_at"))
+        publishes = list(
+            services.available_publishes(request.user)
+            .annotate(_qcount=Count("paper__paper_questions", distinct=True))
+            .order_by("-created_at")
+        )
         sheets = {
             s.publish_id: s
             for s in AnswerSheet.objects.filter(student=request.user, publish_id__in=[p.id for p in publishes])
@@ -178,8 +186,16 @@ class MyAssessmentViewSet(viewsets.GenericViewSet):
                 subjective += 1
             details.append(item)
 
+        # 班级平均分：仅统计本人所在班级（已通过审核）的学生答卷，避免跨校/跨班混算
+        class_ids = services.student_class_ids(sheet.student)
+        class_students = User.objects.filter(
+            role=User.ROLE_STUDENT,
+            class_memberships__klass_id__in=class_ids,
+            class_memberships__status=services.APPROVED,
+            class_memberships__is_deleted=False,
+        ).distinct()
         class_qs = AnswerSheet.objects.filter(
-            is_submitted=True, is_deleted=False, paper=paper
+            is_submitted=True, is_deleted=False, paper=paper, student__in=class_students
         )
         class_average = class_qs.aggregate(value=Avg("total_score"))["value"] or 0
 
@@ -298,12 +314,15 @@ class AnswerSheetViewSet(BaseViewSet):
         correct = answers.filter(is_correct=True).count()
         wrong = answers.filter(is_correct=False).count()
         pending = answers.filter(is_correct__isnull=True).count()
+        total_full = float(sheet.paper.total_score or 0)
+        my_score = float(sheet.total_score or 0)
         data = services.sheet_payload(sheet)
         data.update({
             "paper_total_score": str(sheet.paper.total_score),
             "correct_count": correct,
             "wrong_count": wrong,
             "subjective_pending": pending,
-            "pass": float(sheet.total_score) >= float(sheet.paper.total_score or 0) * 0.6,
+            # 满分为 0 时不得判为通过，避免 0 分也 pass=True
+            "pass": total_full > 0 and my_score >= total_full * 0.6,
         })
         return ApiResponse(data=data, message="提交成功")

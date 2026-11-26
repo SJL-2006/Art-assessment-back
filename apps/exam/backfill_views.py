@@ -138,10 +138,23 @@ def _add_event(record, action, actor, note=""):
 
 
 def _next_code():
+    """生成补录编号：按当日已有最大序号 +1，避免 count() 因软删/删除导致编号撞车。
+
+    注：极端并发下仍可能撞唯一约束，调用方以 transaction 包裹，冲突会整体回滚。
+    """
     prefix = f"BF-{timezone.localdate().strftime('%Y%m%d')}-"
-    seq = BackfillRequest.objects.filter(code__startswith=prefix).count() + 1
-    while BackfillRequest.objects.filter(code=f"{prefix}{seq:03d}").exists():
-        seq += 1
+    last = (
+        BackfillRequest.objects.filter(code__startswith=prefix)
+        .order_by("-code")
+        .values_list("code", flat=True)
+        .first()
+    )
+    seq = 1
+    if last:
+        try:
+            seq = int(last[len(prefix):]) + 1
+        except ValueError:
+            seq = BackfillRequest.objects.filter(code__startswith=prefix).count() + 1
     return f"{prefix}{seq:03d}"
 
 
@@ -677,6 +690,15 @@ class BackfillDirectView(APIView):
 
         klass_id = data.get("klass_id")
         klass = _resolve_klass(student, int(klass_id) if str(klass_id or "").isdigit() else None)
+
+        # 去重：同一学生同一测评仅允许一条未驳回/未撤回的补录记录
+        duplicate = BackfillRequest.objects.filter(
+            student=student, paper_name=paper_name, exam_date=exam_date, is_deleted=False,
+        ).exclude(
+            status__in=[BackfillRequest.STATUS_REJECTED, BackfillRequest.STATUS_CANCELLED],
+        ).exists()
+        if duplicate:
+            raise ApiException("该学生的该测评补录已存在", "duplicate_application", 409)
 
         source_role = user.role if user.role in DIRECT_ACTION_LABELS else BackfillRequest.SOURCE_PROVINCE
         action = DIRECT_ACTION_LABELS.get(source_role, "直接补录")

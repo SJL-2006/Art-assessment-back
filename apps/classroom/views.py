@@ -118,6 +118,9 @@ class ClassRoomViewSet(BaseViewSet):
         # 学校：用 filter_by_scope 收敛到本校
         elif self.request.user.role == User.ROLE_SCHOOL:
             qs = filter_by_scope(qs, self.request.user, school_field="school", region_field=None)
+        # 学生：仅能查看本校班级（加入前检索 / 查看详情）
+        elif self.request.user.role == User.ROLE_STUDENT:
+            qs = qs.filter(school_id=self.request.user.school_id)
         # 列表/详情统一注解已通过审核的学生数
         qs = qs.annotate(student_count=Count(
             "students",
@@ -147,6 +150,19 @@ class ClassRoomViewSet(BaseViewSet):
         if not klass:
             raise ApiException("班级不存在", code=404, status=404)
         return klass
+
+    @staticmethod
+    def _ensure_membership(klass, student):
+        """取或恢复班级-学生关系：已软删除的行复活为待审核，避免命中 unique_together。"""
+        cs = ClassStudent.objects.filter(klass=klass, student=student).first()
+        if cs is None:
+            return ClassStudent.objects.create(klass=klass, student=student, status=PENDING)
+        if cs.is_deleted:
+            cs.is_deleted = False
+            cs.deleted_at = None
+            cs.status = PENDING
+            cs.save(update_fields=["is_deleted", "deleted_at", "status", "updated_at"])
+        return cs
 
     # -------------------- 学生查询自己的班级 --------------------
 
@@ -189,6 +205,8 @@ class ClassRoomViewSet(BaseViewSet):
     @action(detail=True, methods=["post"], url_path="join")
     def join(self, request, pk=None):
         klass = self._get_raw_class(pk)
+        if klass.school_id != request.user.school_id:
+            raise ApiException("只能加入本校班级", code=403, status=403)
         cs = ClassStudent.objects.filter(klass=klass, student=request.user, is_deleted=False).first()
         if cs:
             if cs.status == APPROVED:
@@ -199,7 +217,7 @@ class ClassRoomViewSet(BaseViewSet):
             cs.save(update_fields=["status", "updated_at"])
             return ApiResponse(ClassStudentSerializer(cs).data, message="已重新提交申请")
 
-        cs = ClassStudent.objects.create(klass=klass, student=request.user, status=PENDING)
+        cs = self._ensure_membership(klass, request.user)
         return ApiResponse(ClassStudentSerializer(cs).data, message="申请已提交", status=201)
 
     # -------------------- 教师申请加入班级（科任教师） --------------------
@@ -230,6 +248,15 @@ class ClassRoomViewSet(BaseViewSet):
             ct.course = course
             ct.save(update_fields=["status", "course", "updated_at"])
             return ApiResponse(ClassTeacherSerializer(ct).data, message="已重新提交申请")
+
+        # 复活已软删除的同课程关系，避免命中 unique_together(klass, teacher, course)
+        soft = ClassTeacher.objects.filter(klass=klass, teacher=request.user, course=course).first()
+        if soft is not None:
+            soft.is_deleted = False
+            soft.deleted_at = None
+            soft.status = PENDING
+            soft.save(update_fields=["is_deleted", "deleted_at", "status", "updated_at"])
+            return ApiResponse(ClassTeacherSerializer(soft).data, message="已重新提交申请")
 
         ct = ClassTeacher.objects.create(
             klass=klass, teacher=request.user, course=course, status=PENDING,
@@ -270,7 +297,9 @@ class ClassRoomViewSet(BaseViewSet):
         target = ClassRoom.objects.filter(id=target_id, is_deleted=False).first()
         if not target:
             raise ApiException("目标班级不存在")
-        cs = ClassStudent.objects.create(klass=target, student=request.user, status=PENDING)
+        if target.school_id != request.user.school_id:
+            raise ApiException("只能转入本校班级", code=403, status=403)
+        cs = self._ensure_membership(target, request.user)
         return ApiResponse(ClassStudentSerializer(cs).data, message="换班申请已提交", status=201)
 
     # -------------------- #25 教师审核学生申请 --------------------
@@ -345,6 +374,17 @@ class ClassRoomViewSet(BaseViewSet):
     @action(detail=True, methods=["post"], url_path="students/import")
     def import_students(self, request, pk=None):
         klass = self._get_raw_class(pk)
+        # 越权保护：教师只能向自己所带班级导入，学校只能向本校班级导入
+        if request.user.role == User.ROLE_TEACHER:
+            is_head = klass.head_teacher_id == request.user.id
+            is_subject = ClassTeacher.objects.filter(
+                klass=klass, teacher=request.user, status=APPROVED, is_deleted=False,
+            ).exists()
+            if not (is_head or is_subject):
+                raise ApiException("只能向自己所带班级导入学生", code=403, status=403)
+        elif request.user.role == User.ROLE_SCHOOL and klass.school_id != request.user.school_id:
+            raise ApiException("只能向本校班级导入学生", code=403, status=403)
+
         ser = ImportStudentsSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -365,11 +405,16 @@ class ClassRoomViewSet(BaseViewSet):
             if user.role != User.ROLE_STUDENT:
                 skipped += 1
                 continue
-            _, new = ClassStudent.objects.get_or_create(
-                klass=klass, student=user, is_deleted=False,
-                defaults={"status": APPROVED},
-            )
-            if new:
+            cs = ClassStudent.objects.filter(klass=klass, student=user).first()
+            if cs is None:
+                ClassStudent.objects.create(klass=klass, student=user, status=APPROVED)
+                created += 1
+            elif cs.is_deleted:
+                # 复活已软删除的关系（例如退出后又重新导入），避免命中 unique_together
+                cs.is_deleted = False
+                cs.deleted_at = None
+                cs.status = APPROVED
+                cs.save(update_fields=["is_deleted", "deleted_at", "status", "updated_at"])
                 created += 1
             else:
                 skipped += 1
@@ -388,6 +433,20 @@ class ClassStudentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
 
     def get_queryset(self):
         qs = super().get_queryset()
+        user = self.request.user
+        # 数据隔离：学生仅看本人、教师仅看所带班级、学校仅看本校
+        if user.role == User.ROLE_STUDENT:
+            qs = qs.filter(student=user)
+        elif user.role == User.ROLE_TEACHER:
+            class_ids = ClassRoom.objects.filter(
+                Q(head_teacher=user)
+                | Q(teachers__teacher=user, teachers__status=APPROVED, teachers__is_deleted=False),
+                is_deleted=False,
+            ).values_list("id", flat=True)
+            qs = qs.filter(klass_id__in=class_ids)
+        elif user.role == User.ROLE_SCHOOL:
+            qs = qs.filter(klass__school_id=user.school_id)
+
         status_param = self.request.query_params.get("status")
         if status_param:
             qs = qs.filter(status=status_param)
@@ -407,6 +466,18 @@ class ClassTeacherViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
 
     def get_queryset(self):
         qs = super().get_queryset()
+        user = self.request.user
+        # 数据隔离：教师仅看所带班级、学校仅看本校
+        if user.role == User.ROLE_TEACHER:
+            class_ids = ClassRoom.objects.filter(
+                Q(head_teacher=user)
+                | Q(teachers__teacher=user, teachers__status=APPROVED, teachers__is_deleted=False),
+                is_deleted=False,
+            ).values_list("id", flat=True)
+            qs = qs.filter(klass_id__in=class_ids)
+        elif user.role == User.ROLE_SCHOOL:
+            qs = qs.filter(klass__school_id=user.school_id)
+
         status_param = self.request.query_params.get("status")
         if status_param:
             qs = qs.filter(status=status_param)

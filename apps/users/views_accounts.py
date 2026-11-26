@@ -31,6 +31,7 @@ from apps.users.serializers import (
     BatchCreateAccountSerializer,
     BatchImportAccountSerializer,
     UserSerializer,
+    validate_role_creation,
 )
 
 
@@ -133,6 +134,8 @@ class AccountViewSet(BaseViewSet):
         count = data["count"]
         prefix = data["prefix"]
         role = data["role"]
+        # 防越权：学校端只能批量创建教师 / 学生
+        validate_role_creation(request.user, role)
         default_pwd = data.get("default_password", "123456")
         real_names = data.get("real_names") or []
 
@@ -168,6 +171,8 @@ class AccountViewSet(BaseViewSet):
         ser = BatchImportAccountSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         role = ser.validated_data["role"]
+        # 防越权：批量导入仅限创建学生账号（外校学生导入）
+        validate_role_creation(request.user, role)
         items = ser.validated_data["items"]
 
         created = 0

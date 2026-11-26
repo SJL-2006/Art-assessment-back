@@ -9,6 +9,16 @@ from openpyxl.utils import get_column_letter
 
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
+# 公式注入风险字符：这些开头的字符串会被 Excel 当作公式执行
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _safe_cell_value(value):
+    """公式注入防护：将以 = + - @ 或控制字符开头的字符串转成纯文本。"""
+    if isinstance(value, str) and value.lstrip().startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
 
 def build_workbook(title, headers, rows):
     """构造工作簿：表头加粗居中、冻结首行、自适应列宽。"""
@@ -28,7 +38,7 @@ def build_workbook(title, headers, rows):
 
     for row_index, row in enumerate(rows, start=2):
         for col, value in enumerate(row, start=1):
-            ws.cell(row=row_index, column=col, value=value)
+            ws.cell(row=row_index, column=col, value=_safe_cell_value(value))
 
     ws.freeze_panes = "A2"
     for col in range(1, len(headers) + 1):

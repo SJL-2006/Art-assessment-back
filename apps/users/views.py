@@ -2,8 +2,7 @@
 from django.contrib.auth import get_user_model
 from drf_spectacular.utils import extend_schema
 from PIL import Image
-from rest_framework import generics, permissions
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework import permissions
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.views import APIView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -13,56 +12,29 @@ from apps.classroom.models import APPROVED, ClassRoom, ClassTeacher
 from apps.common.exceptions import ApiException
 from apps.common.response import ApiResponse, ErrorCode
 from apps.users.models import User
-from apps.users.serializers import ChangePasswordSerializer, RegisterSerializer, UserSerializer
+from apps.users.serializers import ChangePasswordSerializer, UserSerializer
 
 
 class LoginSerializer(TokenObtainPairSerializer):
-    """登录规则：学生用学籍号，教师用职工编号，管理员用姓名。"""
+    """登录：兼容 用户名 / 学籍号(student_no) / 职工编号(staff_no) 三种标识。"""
 
     def validate(self, attrs):
         username = (attrs.get(self.username_field) or "").strip()
         if username:
-            if username.isdigit():
-                user = (
-                    User.objects.filter(student_no=username, is_active=True).first()
-                    or User.objects.filter(staff_no=username, is_active=True).first()
-                )
-                if user:
-                    attrs[self.username_field] = user.username
-            else:
-                named = User.objects.filter(username=username, is_active=True).first()
-                if named:
-                    if named.role == User.ROLE_STUDENT:
-                        raise AuthenticationFailed("学生请使用学籍号登录")
-                    if named.role == User.ROLE_TEACHER:
-                        raise AuthenticationFailed("教师请使用职工编号登录")
+            user = (
+                User.objects.filter(username=username, is_active=True).first()
+                or User.objects.filter(student_no=username, is_active=True).first()
+                or User.objects.filter(staff_no=username, is_active=True).first()
+            )
+            if user:
+                # 统一把标识归一为 username，交给 simplejwt 完成鉴权
+                attrs[self.username_field] = user.username
         return super().validate(attrs)
 
 
 class LoginView(TokenObtainPairView):
-    """登录视图：学生用学籍号，教师用职工编号，管理员用姓名。"""
+    """登录视图：账号由上级统一下发，直接使用账号登录。"""
     serializer_class = LoginSerializer
-
-
-class RegisterView(generics.CreateAPIView):
-    serializer_class = RegisterSerializer
-    permission_classes = [permissions.AllowAny]
-
-
-class SchoolCodeCheckView(APIView):
-    """注册页学校编号校验：GET /api/users/school-check/?code=0001。"""
-
-    permission_classes = [permissions.AllowAny]
-
-    @extend_schema(responses={200: None})
-    def get(self, request):
-        from apps.org.models import School
-
-        code = (request.query_params.get("code") or "").strip()
-        school = School.objects.filter(code=code, is_deleted=False).first() if code else None
-        if school is None:
-            return ApiResponse({"exists": False})
-        return ApiResponse({"exists": True, "code": school.code, "name": school.name})
 
 
 class CurrentUserView(APIView):

@@ -1,9 +1,3 @@
-from rest_framework.decorators import action
-
-from apps.common.deepseek_service import get_deepseek_service
-from apps.common.exceptions import ApiException
-from apps.common.permissions import has_role
-from apps.common.response import ApiResponse
 """测评：试卷、发布、答卷、成绩、证书。"""
 import io
 import os
@@ -22,6 +16,7 @@ from rest_framework.views import APIView
 
 from apps.classroom.models import ClassRoom
 
+from apps.common.deepseek_service import get_deepseek_service
 from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
 from apps.common.response import ApiResponse, ErrorCode
@@ -41,8 +36,6 @@ from apps.exam.serializers import (
     PaperSerializer,
     PublishCreateSerializer,
 )
-from apps.questionbank.models import Question
-from apps.users.models import User
 from apps.questionbank.models import Course, Question, QuestionResource
 from apps.users.models import User
 
@@ -86,6 +79,21 @@ def normalize_subject(value):
     return raw
 
 
+def _apply_paper_scope(user, qs):
+    """按角色收敛试卷数据范围：教师→自建，学校/区县/市→创建人所属范围，省/超管→全部。"""
+    if user.is_superuser or user.role == User.ROLE_PROVINCE:
+        return qs
+    if user.role == User.ROLE_CITY:
+        return qs.filter(creator__school__region_id__in=services.visible_region_ids(user))
+    if user.role == User.ROLE_DISTRICT:
+        return qs.filter(creator__school__region_id=user.region_id)
+    if user.role == User.ROLE_SCHOOL:
+        return qs.filter(creator__school_id=user.school_id)
+    if user.role == User.ROLE_TEACHER:
+        return qs.filter(creator=user)
+    return qs.none()
+
+
 class PaperViewSet(BaseViewSet):
     """试卷 CRUD，含自动组卷与暂存。"""
     queryset = Paper.objects.all()
@@ -101,7 +109,7 @@ class PaperViewSet(BaseViewSet):
         return PaperSerializer
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = _apply_paper_scope(self.request.user, super().get_queryset())
         params = self.request.query_params
         for param, field in {
             "subject": "subject",
@@ -298,6 +306,8 @@ class PaperViewSet(BaseViewSet):
         两者同时传入时优先使用 questions。
         """
         paper = self.get_object()
+        if paper.status == Paper.STATUS_PUBLISHED:
+            raise ApiException("试卷已发布，不能修改试题，请先撤回", status=400)
         serializer = DraftRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -398,6 +408,7 @@ class PaperQuestionViewSet(BaseViewSet):
     """试卷试题关联。"""
     queryset = PaperQuestion.objects.all()
     serializer_class = PaperQuestionSerializer
+    permission_classes = [has_role(*PAPER_ROLES)]
 
 
 class PaperPublishViewSet(BaseViewSet):
@@ -405,6 +416,22 @@ class PaperPublishViewSet(BaseViewSet):
     queryset = PaperPublish.objects.all()
     serializer_class = PaperPublishSerializer
     permission_classes = [has_role(*PAPER_ROLES)]
+
+    def get_queryset(self):
+        # 发布记录随其试卷归属收敛，防止越权撤回/重新发布他人试卷
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_superuser or user.role == User.ROLE_PROVINCE:
+            return qs
+        if user.role == User.ROLE_CITY:
+            return qs.filter(paper__creator__school__region_id__in=services.visible_region_ids(user))
+        if user.role == User.ROLE_DISTRICT:
+            return qs.filter(paper__creator__school__region_id=user.region_id)
+        if user.role == User.ROLE_SCHOOL:
+            return qs.filter(paper__creator__school_id=user.school_id)
+        if user.role == User.ROLE_TEACHER:
+            return qs.filter(paper__creator=user)
+        return qs.none()
 
     @extend_schema(
         request=PublishCreateSerializer,
@@ -417,6 +444,10 @@ class PaperPublishViewSet(BaseViewSet):
         data = serializer.validated_data
 
         paper = data["paper"]
+
+        # 越权保护：只能发布自己数据范围内的试卷
+        if not _apply_paper_scope(request.user, Paper.objects.filter(id=paper.id)).exists():
+            raise ApiException("无权发布该试卷", status=403)
 
         # 0 道题的试卷不允许发布
         q_count = paper.paper_questions.count()
@@ -498,6 +529,29 @@ class AnswerViewSet(BaseViewSet):
     """答题明细。"""
     queryset = Answer.objects.all()
     serializer_class = AnswerSerializer
+    permission_classes = [
+        has_role(
+            User.ROLE_TEACHER, User.ROLE_SCHOOL, User.ROLE_DISTRICT,
+            User.ROLE_CITY, User.ROLE_PROVINCE,
+        )
+    ]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if user.is_superuser or user.role == User.ROLE_PROVINCE:
+            return qs
+        if user.role == User.ROLE_CITY:
+            return qs.filter(sheet__student__school__region_id__in=services.visible_region_ids(user))
+        if user.role == User.ROLE_DISTRICT:
+            return qs.filter(sheet__student__school__region_id=user.region_id)
+        if user.role == User.ROLE_SCHOOL:
+            return qs.filter(sheet__student__school_id=user.school_id)
+        if user.role == User.ROLE_TEACHER:
+            from apps.exam.student_views import _teacher_student_ids
+
+            return qs.filter(sheet__student_id__in=_teacher_student_ids(user))
+        return qs.none()
 
     @action(
         detail=True,

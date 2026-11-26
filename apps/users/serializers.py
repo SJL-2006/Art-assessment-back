@@ -55,7 +55,11 @@ class UserSerializer(serializers.ModelSerializer):
             "student_no", "staff_no", "school", "school_name", "school_code",
             "region", "region_name", "classes", "class_name", "email", "date_joined",
         ]
-        read_only_fields = ["id", "username", "role", "date_joined"]
+        read_only_fields = [
+            "id", "username", "role", "date_joined",
+            # 身份字段不允许个人自助修改，避免学生改写学籍号 / 教师改写职工编号 / 换学校
+            "school", "region", "student_no", "staff_no",
+        ]
 
     # ---- 展示字段：头像返回相对路径，避免 HTTPS 反向代理下出现混合内容 ----
     def get_avatar(self, obj):
@@ -103,46 +107,6 @@ class UserSerializer(serializers.ModelSerializer):
         return rows[0].klass.name if rows else ""
 
 
-class RegisterSerializer(serializers.ModelSerializer):
-    """用户注册。
-
-    学校支持两种传法：
-    - school: 学校 ID（整数）
-    - school_code: 学校编号（字符串，如 SCH001），由后端解析为学校
-    两者都传时以 school_code 为准；仅传 school_code 时自动带出该学校所属行政区。
-    """
-    password = serializers.CharField(write_only=True, validators=[validate_password])
-    school_code = serializers.CharField(
-        write_only=True, required=False, allow_blank=True,
-        help_text="学校编号，如 SCH001",
-    )
-
-    class Meta:
-        model = User
-        fields = [
-            "username", "password", "role", "real_name", "phone",
-            "student_no", "staff_no", "school", "school_code", "region",
-        ]
-
-    def validate(self, attrs):
-        code = (attrs.pop("school_code", "") or "").strip()
-        if code:
-            from apps.org.models import School
-
-            school = School.objects.filter(code=code).first()
-            if school is None:
-                raise serializers.ValidationError({"school_code": f"学校编号 {code} 不存在"})
-            attrs["school"] = school
-            # 未指定行政区时，跟随学校所属区县
-            if not attrs.get("region") and school.region_id:
-                attrs["region"] = school.region
-        return attrs
-
-    def create(self, validated_data):
-        password = validated_data.pop("password")
-        return User.objects.create_user(password=password, **validated_data)
-
-
 class ChangePasswordSerializer(serializers.Serializer):
     """修改密码。"""
     old_password = serializers.CharField()
@@ -150,6 +114,34 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 
 # ============ 账号管理（role 参数化） ============
+
+# 角色层级：用于防越权建号（值越大层级越高）
+ROLE_RANK = {
+    User.ROLE_STUDENT: 0,
+    User.ROLE_TEACHER: 1,
+    User.ROLE_SCHOOL: 2,
+    User.ROLE_DISTRICT: 3,
+    User.ROLE_CITY: 4,
+    User.ROLE_PROVINCE: 5,
+}
+
+
+def validate_role_creation(caller, target_role):
+    """校验 caller 是否有权创建/指派 target_role 的账号（防越权提权）。
+
+    - 超级管理员不受限；
+    - 题库管理员（qb_admin）只能由超级管理员预置，不允许通过账号管理接口创建；
+    - 其它角色只能创建严格低于自己层级的账号（省→市→区→校→师→生）。
+    """
+    if caller.is_superuser:
+        return
+    if target_role == User.ROLE_QB_ADMIN:
+        raise serializers.ValidationError("题库管理员账号不允许通过此接口创建")
+    caller_rank = ROLE_RANK.get(caller.role, -1)
+    target_rank = ROLE_RANK.get(target_role, -1)
+    if target_rank < 0 or target_rank >= caller_rank:
+        raise serializers.ValidationError("无权创建该角色账号")
+
 
 class AccountManageSerializer(serializers.ModelSerializer):
     """#28-32 后台账号管理：role 由调用方指定，字段随 role 而异。"""
@@ -164,11 +156,9 @@ class AccountManageSerializer(serializers.ModelSerializer):
         extra_kwargs = {"password": {"write_only": True, "required": False}}
 
     def validate_role(self, value):
-        # 学校管理员不能创建/删除省/市/区县管理员
         request = self.context.get("request")
-        if request and request.user.role == User.ROLE_SCHOOL:
-            if value in (User.ROLE_PROVINCE, User.ROLE_CITY, User.ROLE_DISTRICT):
-                raise serializers.ValidationError("学校管理员不能创建该角色账号")
+        if request:
+            validate_role_creation(request.user, value)
         return value
 
     def create(self, validated_data):
