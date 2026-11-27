@@ -29,6 +29,31 @@ class OperationLogMiddleware:
             return cls.MODULE_LABELS.get(parts[1], parts[1])
         return parts[0] if parts else ""
 
+    @staticmethod
+    def _resolve_user(request):
+        """解析操作人。
+
+        JWT 由 DRF 层校验，Django 中间件里 request.user 恒为 AnonymousUser；
+        因此优先从 Authorization 头解出 user_id，session 认证（如 admin）兜底。
+        """
+        if request.user.is_authenticated:
+            return request.user
+        auth = request.META.get("HTTP_AUTHORIZATION", "")
+        if not auth.startswith("Bearer "):
+            return None
+        from django.contrib.auth import get_user_model
+        from rest_framework_simplejwt.exceptions import TokenError
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        try:
+            user_id = AccessToken(auth.split(" ", 1)[1]).get("user_id")
+        except (TokenError, Exception):
+            return None
+        if user_id is None:
+            return None
+        user_model = get_user_model()
+        return user_model.objects.filter(pk=user_id, is_active=True).first()
+
     def _log(self, request):
         if not getattr(settings, "OPERATION_LOG_ENABLED", False):
             return
@@ -40,7 +65,7 @@ class OperationLogMiddleware:
             from apps.common.models import OperationLog
 
             OperationLog.objects.create(
-                user=request.user if request.user.is_authenticated else None,
+                user=self._resolve_user(request),
                 action=request.method,
                 module=self._module(request.path),
                 method=request.method,

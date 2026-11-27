@@ -249,9 +249,12 @@ class ScoreImportView(APIView):
             if student_no:
                 student = allowed.filter(student_no=str(student_no).strip()).first()
             if student is None and real_name:
-                student = allowed.filter(real_name=str(real_name).strip()).first()
+                # 姓名仅作兜底，且要求唯一匹配，避免重名时误入到他人名下
+                name_matches = allowed.filter(real_name=str(real_name).strip())
+                if name_matches.count() == 1:
+                    student = name_matches.first()
             if student is None:
-                errors.append({"row": index, "error": "学生不存在或不在管理范围内"})
+                errors.append({"row": index, "error": "学生不存在、不在管理范围内或姓名重复"})
                 continue
 
             course = None
@@ -543,6 +546,9 @@ class TeacherAnswerSheetScoreView(APIView):
         else:
             if not services.scoped_students(user).filter(id=sheet.student_id).exists():
                 raise ApiException("无权为该答卷打分", ErrorCode.FORBIDDEN, 403)
+
+        if not sheet.is_submitted:
+            raise ApiException("答卷尚未提交，无法评分", ErrorCode.INVALID_PARAM, 400)
 
         answers = request.data.get("answers")
         if not isinstance(answers, list) or not answers:

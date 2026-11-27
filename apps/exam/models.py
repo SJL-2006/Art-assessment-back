@@ -164,6 +164,7 @@ class Answer(BaseModel):
         db_table = "exam_answer"
         verbose_name = "答题明细"
         verbose_name_plural = "答题明细"
+        unique_together = [("sheet", "question")]
 
 
 class PerformanceScore(BaseModel):
@@ -234,6 +235,7 @@ class Certificate(BaseModel):
         db_table = "exam_certificate"
         verbose_name = "证书"
         verbose_name_plural = "证书"
+        unique_together = [("student", "sheet")]
 
     def __str__(self):
         return self.title

@@ -46,10 +46,6 @@ class Question(BaseModel):
         ("single", "单选题"),
         ("multiple", "多选题"),
         ("judge", "判断题"),
-        ("fill", "填空题"),
-        ("short", "简答题"),
-        ("listening", "听力题"),
-        ("sight", "视唱/识谱题"),
     ]
     DIFFICULTY_CHOICES = [
         ("easy", "简单"),

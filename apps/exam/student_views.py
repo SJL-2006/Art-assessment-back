@@ -188,6 +188,11 @@ class ExtracurricularViewSet(viewsets.GenericViewSet):
         image = request.FILES.get("image")
         if image is None:
             raise ApiException("请上传图片（字段名 image）", ErrorCode.INVALID_PARAM, 400)
+        content_type = (getattr(image, "content_type", "") or "").lower()
+        if not content_type.startswith("image/"):
+            raise ApiException("仅支持图片文件", ErrorCode.INVALID_PARAM, 400)
+        if image.size > 5 * 1024 * 1024:
+            raise ApiException("图片不能超过 5MB", ErrorCode.INVALID_PARAM, 400)
         title = request.data.get("title") or "课外学习成果"
         record = ExtracurricularUpload.objects.create(
             student=request.user,

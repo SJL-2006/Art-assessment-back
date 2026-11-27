@@ -1,4 +1,4 @@
-"""初始化演示数据（幂等）：账号 + 组织 + 班级 + 题库（音乐/美术各 20+ 道，覆盖全题型/难度/年级）+ 已发布试卷。
+"""初始化演示数据（幂等）：账号 + 组织 + 班级 + 题库（音乐/美术，覆盖选择题与判断题/难度/年级）+ 已发布试卷。
 
 运行：python manage.py seed_demo
 """
@@ -16,7 +16,7 @@ from apps.users.models import User
 
 
 class Command(BaseCommand):
-    help = "初始化演示数据：账号/组织/班级 + 音乐/美术题库（各 20+ 道）+ 已发布试卷。"
+    help = "初始化演示数据：账号/组织/班级 + 音乐/美术题库（选择题与判断题）+ 已发布试卷。"
 
     @transaction.atomic
     def handle(self, *args, **options):
@@ -79,18 +79,17 @@ class Command(BaseCommand):
         ClassStudent.objects.get_or_create(klass=klass5, student=student5, defaults={"status": APPROVED})
 
 
-        # 4) 课程 + 章节 + 已审核试题（音乐 27 + 美术 23，共 50 道，覆盖全题型/难度/年级）
+        # 4) 课程 + 章节 + 已审核试题（音乐 19 + 美术 17，共 36 道，覆盖选择题/判断题/难度/年级）
         music, _ = Course.objects.get_or_create(name="音乐", defaults={"code": "music"})
         art, _ = Course.objects.get_or_create(name="美术", defaults={"code": "art"})
 
         music_ch1, _ = Chapter.objects.get_or_create(course=music, name="乐理基础", defaults={"sort": 1})
-        music_ch2, _ = Chapter.objects.get_or_create(course=music, name="视唱练耳", defaults={"sort": 2})
         art_ch1, _ = Chapter.objects.get_or_create(course=art, name="色彩基础", defaults={"sort": 1})
         art_ch2, _ = Chapter.objects.get_or_create(course=art, name="造型基础", defaults={"sort": 2})
 
         # (课程, 章节, 题型, 难度, 年级, 题干, 选项, 答案, 解析, 分值)
         question_specs = [
-            # ========== 音乐（27 道） ==========
+            # ========== 音乐（19 道） ==========
             # 三年级（含演示试卷沿用的原 4 道）
             (music, music_ch1, "single", "easy", "三年级", "以下哪个是高音谱号？",
              [{"key": "A", "text": "𝄞"}, {"key": "B", "text": "𝄢"}, {"key": "C", "text": "𝄡"}, {"key": "D", "text": "𝄣"}],
@@ -103,8 +102,6 @@ class Command(BaseCommand):
              "ACD", "二胡是中国民族乐器，其余为西洋乐器。", 3),
             (music, music_ch1, "judge", "easy", "三年级", "标准音 a1 的频率是 440Hz。",
              [], "正确", "国际标准音 a1 = 440Hz。", 1),
-            (music, music_ch1, "fill", "medium", "三年级", "五线谱由 ____ 条平行线组成。",
-             [], "五", "五线谱由五条平行线构成。", 2),
             # 一年级
             (music, music_ch1, "single", "easy", "一年级", "唱歌时应该用怎样的声音？",
              [{"key": "A", "text": "大声喊叫"}, {"key": "B", "text": "自然好听的声音"}, {"key": "C", "text": "小声嘟囔"}, {"key": "D", "text": "闭着嘴哼"}],
@@ -114,8 +111,6 @@ class Command(BaseCommand):
             (music, music_ch1, "single", "easy", "一年级", "听到进行曲时，人们通常会联想到？",
              [{"key": "A", "text": "睡觉"}, {"key": "B", "text": "踏步前进"}, {"key": "C", "text": "安静看书"}, {"key": "D", "text": "哭泣"}],
              "B", "进行曲节奏鲜明，适合踏步前进。", 2),
-            (music, music_ch1, "fill", "easy", "一年级", "音阶 do re mi fa sol la si 中第一个音唱作 ____。",
-             [], "do", "音阶第一个音的唱名是 do。", 2),
             # 二年级
             (music, music_ch1, "single", "easy", "二年级", "二拍子的强弱规律是？",
              [{"key": "A", "text": "强弱弱"}, {"key": "B", "text": "强弱"}, {"key": "C", "text": "强强弱"}, {"key": "D", "text": "弱强"}],
@@ -125,8 +120,6 @@ class Command(BaseCommand):
             (music, music_ch1, "multiple", "medium", "二年级", "以下哪些是打击乐器？",
              [{"key": "A", "text": "小鼓"}, {"key": "B", "text": "三角铁"}, {"key": "C", "text": "小提琴"}, {"key": "D", "text": "碰铃"}],
              "ABD", "小提琴属于弦乐器。", 3),
-            (music, music_ch1, "fill", "medium", "二年级", "四分音符由一个实心符头加一根 ____ 组成。",
-             [], "符干", "四分音符由实心符头和符干组成。", 2),
             # 四年级
             (music, music_ch1, "single", "medium", "四年级", "三拍子的强弱规律是？",
              [{"key": "A", "text": "强弱弱"}, {"key": "B", "text": "强弱"}, {"key": "C", "text": "强强弱弱"}, {"key": "D", "text": "弱强弱"}],
@@ -136,8 +129,6 @@ class Command(BaseCommand):
              "ABD", "长笛是西洋木管乐器。", 3),
             (music, music_ch1, "judge", "medium", "四年级", "附点音符会把前面音符的时值延长一半。",
              [], "正确", "附点延长原音符时值的一半。", 1),
-            (music, music_ch1, "fill", "hard", "四年级", "4/4 拍表示以四分音符为一拍，每小节有 ____ 拍。",
-             [], "4", "4/4 拍每小节四拍。", 2),
             # 五年级
             (music, music_ch1, "single", "medium", "五年级", "下列哪个力度记号表示“很强”？",
              [{"key": "A", "text": "p"}, {"key": "B", "text": "mp"}, {"key": "C", "text": "ff"}, {"key": "D", "text": "mf"}],
@@ -147,10 +138,6 @@ class Command(BaseCommand):
              "ABC", "长号属于铜管组。", 3),
             (music, music_ch1, "judge", "medium", "五年级", "升记号 # 表示将音升高半音。",
              [], "正确", "# 为升记号，表示升高半音。", 1),
-            (music, music_ch2, "fill", "hard", "五年级", "国际标准音 A4 的频率为 ____ Hz。",
-             [], "440", "国际标准音 A4 = 440Hz。", 2),
-            (music, music_ch2, "short", "hard", "五年级", "简述二拍子与三拍子的强弱规律区别。",
-             [], "二拍子为强弱交替；三拍子为强弱弱。", "考查常见拍号的强弱规律。", 5),
             # 六年级
             (music, music_ch1, "single", "medium", "六年级", "大调音阶中，第几级音是主音？",
              [{"key": "A", "text": "第一级"}, {"key": "B", "text": "第三级"}, {"key": "C", "text": "第五级"}, {"key": "D", "text": "第七级"}],
@@ -160,19 +147,13 @@ class Command(BaseCommand):
              "ABCD", "以上均属常见曲式结构。", 3),
             (music, music_ch1, "judge", "hard", "六年级", "休止符表示声音停止，同时也占一定时值。",
              [], "正确", "休止符表示静默，但仍占相应时值。", 1),
-            (music, music_ch2, "listening", "medium", "六年级", "听辨：该段旋律的拍号最可能是？",
-             [], "3/4", "需配合音频资源听辨，示例答案为 3/4。", 2),
-            (music, music_ch2, "sight", "hard", "六年级", "视唱：按给定谱例视唱并上传音频。",
-             [], "（见谱例）", "视唱题示例，需配合谱例资源。", 5),
-            # ========== 美术（23 道） ==========
+            # ========== 美术（17 道） ==========
             # 一年级
             (art, art_ch1, "single", "easy", "一年级", "美术中的三原色是指哪三种颜色？",
              [{"key": "A", "text": "红黄蓝"}, {"key": "B", "text": "红绿蓝"}, {"key": "C", "text": "青品黄"}, {"key": "D", "text": "黑白灰"}],
              "A", "美术三原色为红、黄、蓝。", 2),
             (art, art_ch1, "judge", "easy", "一年级", "红色和黄色混合可以调出橙色。",
              [], "正确", "红 + 黄 = 橙。", 1),
-            (art, art_ch1, "fill", "easy", "一年级", "画太阳时，通常可以使用 ____ 色。",
-             [], "红", "太阳常被表现为红色或橙黄色。", 2),
             (art, art_ch1, "single", "easy", "一年级", "以下哪种工具适合辅助画直线？",
              [{"key": "A", "text": "直尺"}, {"key": "B", "text": "橡皮"}, {"key": "C", "text": "调色盘"}, {"key": "D", "text": "毛笔"}],
              "A", "直尺可以辅助画出笔直的线条。", 2),
@@ -182,16 +163,12 @@ class Command(BaseCommand):
              "B", "暖色调（红橙黄）给人温暖、热烈的感觉。", 2),
             (art, art_ch1, "judge", "easy", "二年级", "对称的图形左右两边大小一样。",
              [], "正确", "对称图形两边完全重合。", 1),
-            (art, art_ch1, "fill", "medium", "二年级", "两种原色相调得到的颜色叫 ____ 色。",
-             [], "间", "间色又称二次色。", 2),
             # 三年级
             (art, art_ch1, "multiple", "medium", "三年级", "以下哪些颜色属于冷色？",
              [{"key": "A", "text": "蓝"}, {"key": "B", "text": "绿"}, {"key": "C", "text": "红"}, {"key": "D", "text": "橙"}],
              "AB", "蓝、绿为冷色，红、橙为暖色。", 3),
             (art, art_ch1, "judge", "easy", "三年级", "素描中，暗部与亮部之间的过渡层次叫灰面。",
              [], "正确", "素描三大面：亮面、灰面、暗面。", 1),
-            (art, art_ch1, "fill", "easy", "三年级", "色彩三要素是色相、明度和 ____。",
-             [], "纯度", "色彩三要素：色相、明度、纯度。", 2),
             (art, art_ch2, "single", "medium", "三年级", "下列哪种线条最能表现平静、稳定的感觉？",
              [{"key": "A", "text": "水平直线"}, {"key": "B", "text": "波浪线"}, {"key": "C", "text": "折线"}, {"key": "D", "text": "放射线"}],
              "A", "水平直线给人平静、稳定的感觉。", 2),
@@ -204,8 +181,6 @@ class Command(BaseCommand):
              "ABCD", "点、线、面、体是基本造型元素。", 3),
             (art, art_ch2, "judge", "medium", "四年级", "水彩画中，颜料越湿越容易相互晕染。",
              [], "正确", "湿画法下颜色容易相互晕染。", 1),
-            (art, art_ch2, "fill", "hard", "四年级", "透视的基本规律是近大远 ____。",
-             [], "小", "近大远小。", 2),
             # 五年级
             (art, art_ch2, "single", "medium", "五年级", "下列哪种构图方式最能强调主体居中的稳定感？",
              [{"key": "A", "text": "对称构图"}, {"key": "B", "text": "三角形构图"}, {"key": "C", "text": "对角线构图"}, {"key": "D", "text": "散点构图"}],
@@ -215,8 +190,6 @@ class Command(BaseCommand):
              "ABD", "油画属于西方绘画。", 3),
             (art, art_ch1, "judge", "medium", "五年级", "明度是指色彩的明暗程度。",
              [], "正确", "明度即色彩的明暗程度。", 1),
-            (art, art_ch2, "fill", "medium", "五年级", "画面中视觉中心的位置通常称为 ____ 点。",
-             [], "视", "视觉中心即视点。", 2),
             # 六年级
             (art, art_ch2, "single", "hard", "六年级", "下列哪一项最能体现画面的空间层次？",
              [{"key": "A", "text": "重复同一颜色"}, {"key": "B", "text": "近实远虚"}, {"key": "C", "text": "所有物体画成同样大小"}, {"key": "D", "text": "只画轮廓"}],
@@ -226,8 +199,6 @@ class Command(BaseCommand):
              "ABD", "水彩画不属于版画。", 3),
             (art, art_ch2, "judge", "hard", "六年级", "冷色调一般能给人安静、深远的感觉。",
              [], "正确", "冷色常带来安静、深远之感。", 1),
-            (art, art_ch2, "short", "hard", "六年级", "简述色彩冷暖在画面情感表达中的作用。",
-             [], "暖色传递热烈温暖，冷色传递安静深远等情感。", "考查色彩的情感表达。", 5),
         ]
 
         created = 0

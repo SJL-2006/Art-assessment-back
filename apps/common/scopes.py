@@ -5,7 +5,7 @@ A 交付给 B/C 的核心地基——B/C 的统计口径依赖此方法统一。
 """
 from typing import Optional
 
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 
 from apps.users.models import User
 
@@ -62,24 +62,48 @@ def filter_by_scope(
         if user.region_id is None:
             return qs.none()
         region_ids = _get_descendant_region_ids(user.region)
-        # 有 region_field 的模型
-        if region_field and hasattr(qs.model, region_field):
-            qs = qs.filter(**{f"{region_field}__id__in": region_ids})
-        # 有 school_field 的模型 → 按学校所属区域过滤
-        if school_field and hasattr(qs.model, school_field):
-            qs = qs.filter(**{f"{school_field}__region_id__in": region_ids})
-        return qs
+        region_q = (
+            Q(**{f"{region_field}__id__in": region_ids})
+            if region_field and hasattr(qs.model, region_field)
+            else None
+        )
+        school_q = (
+            Q(**{f"{school_field}__region_id__in": region_ids})
+            if school_field and hasattr(qs.model, school_field)
+            else None
+        )
+        # 同时有 region/school 关联的模型（如 User），按“或”合并：
+        # 既能看到 region 级账号（school 为空），也能看到本市学校下的账号
+        if region_q and school_q:
+            return qs.filter(region_q | school_q)
+        if region_q:
+            return qs.filter(region_q)
+        if school_q:
+            return qs.filter(school_q)
+        return qs.none()
 
     # 3. 区县 → 本区县 + 本区县下属学校
     if role == User.ROLE_DISTRICT:
         if user.region_id is None:
             return qs.none()
         region_ids = _get_descendant_region_ids(user.region)
-        if region_field and hasattr(qs.model, region_field):
-            qs = qs.filter(**{f"{region_field}__id__in": region_ids})
-        if school_field and hasattr(qs.model, school_field):
-            qs = qs.filter(**{f"{school_field}__region_id__in": region_ids})
-        return qs
+        region_q = (
+            Q(**{f"{region_field}__id__in": region_ids})
+            if region_field and hasattr(qs.model, region_field)
+            else None
+        )
+        school_q = (
+            Q(**{f"{school_field}__region_id__in": region_ids})
+            if school_field and hasattr(qs.model, school_field)
+            else None
+        )
+        if region_q and school_q:
+            return qs.filter(region_q | school_q)
+        if region_q:
+            return qs.filter(region_q)
+        if school_q:
+            return qs.filter(school_q)
+        return qs.none()
 
     # 4. 学校管理员 → 本校
     if role == User.ROLE_SCHOOL:

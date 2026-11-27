@@ -24,12 +24,23 @@ class User(AbstractUser):
         (ROLE_QB_ADMIN, "题库管理员"),
     ]
 
+    # 教师类型（仅 role=teacher 使用；其他角色为空串）
+    TEACHER_TYPE_HEAD = "head"
+    TEACHER_TYPE_SUBJECT = "subject"
+    TEACHER_TYPE_CHOICES = [
+        (TEACHER_TYPE_HEAD, "班主任"),
+        (TEACHER_TYPE_SUBJECT, "科任老师"),
+    ]
+
     role = models.CharField("角色", max_length=16, choices=ROLE_CHOICES, default=ROLE_STUDENT)
     real_name = models.CharField("真实姓名", max_length=32, blank=True)
     phone = models.CharField("手机号", max_length=20, blank=True)
     avatar = models.FileField("头像", upload_to="avatars/", blank=True)
-    student_no = models.CharField("学籍号", max_length=64, blank=True)
-    staff_no = models.CharField("职工编号", max_length=64, blank=True)
+    student_no = models.CharField("学籍号", max_length=64, blank=True, db_index=True)
+    staff_no = models.CharField("职工编号", max_length=64, blank=True, db_index=True)
+    teacher_type = models.CharField(
+        "教师类型", max_length=16, blank=True, default="", choices=TEACHER_TYPE_CHOICES,
+    )
     bio = models.TextField("简介", blank=True)
 
     school = models.ForeignKey(

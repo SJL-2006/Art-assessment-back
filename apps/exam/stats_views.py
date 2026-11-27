@@ -36,6 +36,14 @@ def _filtered_sheets(request):
     if region_id:
         if user.role not in (User.ROLE_PROVINCE, User.ROLE_CITY, User.ROLE_DISTRICT):
             raise ApiException("无权按地区查看数据", ErrorCode.FORBIDDEN, 403)
+        # 越权保护：只能按自己可见的行政区过滤，防止区县号跨区/跨市查询
+        if user.role != User.ROLE_PROVINCE:
+            try:
+                region_id_int = int(region_id)
+            except (TypeError, ValueError):
+                raise ApiException("region_id 非法", ErrorCode.INVALID_PARAM, 400)
+            if region_id_int not in services.visible_region_ids(user):
+                raise ApiException("无权查看该地区数据", ErrorCode.FORBIDDEN, 403)
         students = students.filter(school__region_id=region_id)
 
     grade = params.get("grade")
