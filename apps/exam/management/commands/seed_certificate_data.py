@@ -29,72 +29,72 @@ SUBJECTS = [(Paper.SUBJECT_MUSIC, "音乐"), (Paper.SUBJECT_ART, "美术")]
 
 # 每张共享模板图片的规格（文件相对 media 根目录）
 SEED_IMAGE_DIR = "cert-uploads/seed"
-SEED_IMAGES = {
-    "music_pending": ("MUSIC CERTIFICATE", "Chengdu Primary & Secondary School", "Art Assessment 2026"),
-    "music_approved": ("MUSIC CERTIFICATE", "Chengdu Primary & Secondary School", "Art Assessment 2026"),
-    "music_rejected": ("MUSIC CERTIFICATE", "Chengdu Primary & Secondary School", "Art Assessment 2026"),
-    "art_pending": ("ART CERTIFICATE", "Chengdu Primary & Secondary School", "Art Assessment 2026"),
-    "art_approved": ("ART CERTIFICATE", "Chengdu Primary & Secondary School", "Art Assessment 2026"),
-    "art_rejected": ("ART CERTIFICATE", "Chengdu Primary & Secondary School", "Art Assessment 2026"),
+
+# 中文字体候选（找到即用中文模板，找不到降级为英文模板，不因缺字体而失败）
+FONT_CANDIDATES = [
+    r"C:\Windows\Fonts\msyh.ttc",
+    r"C:\Windows\Fonts\simsun.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+]
+
+# 上传证书标题模板：按 (学科, 状态) 轮换，避免队列标题全部同名
+UPLOAD_TITLES = {
+    ("music", "pending"): [
+        "成都市中小学生艺术节器乐比赛一等奖",
+        "成都市青少年音乐才艺大赛二等奖",
+        "成都市校园艺术节合唱比赛一等奖",
+        "成都市中小学生艺术节独奏比赛三等奖",
+    ],
+    ("music", "approved"): [
+        "四川省中小学生艺术展演二等奖",
+        "成都市中小学生艺术节独唱比赛一等奖",
+    ],
+    ("music", "rejected"): [
+        "成都市青少年音乐比赛参赛证书",
+        "校级艺术之星评选证书",
+    ],
+    ("art", "pending"): [
+        "成都市中小学生艺术节绘画比赛一等奖",
+        "成都市青少年书画大赛二等奖",
+        "成都市校园艺术节手工作品一等奖",
+    ],
+    ("art", "approved"): [
+        "四川省青少年美术作品展二等奖",
+        "成都市中小学生艺术节书法比赛一等奖",
+    ],
+    ("art", "rejected"): [
+        "成都市青少年书画大赛参赛证书",
+        "校级艺术之星评选证书",
+    ],
 }
 
-# 上传证书模板（按序号 0/1/2 = pending / approved / rejected，多余模板用于 --uploads-per-class > 3 时循环）
-UPLOAD_TEMPLATES = [
-    {
-        "title": "成都市中小学生艺术节器乐比赛一等奖",
-        "subject": StudentCertificate.SUBJECT_MUSIC,
-        "issuer": "成都市教育局",
-        "image": "music_pending.png",
-        "status": StudentCertificate.STATUS_PENDING,
-        "comment": "",
-        "note": "参加市级艺术比赛获奖，请老师审核。",
-    },
-    {
-        "title": "四川省青少年美术作品展二等奖",
-        "subject": StudentCertificate.SUBJECT_ART,
-        "issuer": "四川省教育厅",
-        "image": "art_approved.png",
-        "status": StudentCertificate.STATUS_APPROVED,
-        "comment": "证书真实有效，审核通过。",
-        "note": "参加省级美术作品展获奖，已上传证书照片。",
-    },
-    {
-        "title": "成都市青少年书画大赛参赛证书",
-        "subject": StudentCertificate.SUBJECT_MUSIC,
-        "issuer": "成都市教育局",
-        "image": "music_rejected.png",
-        "status": StudentCertificate.STATUS_REJECTED,
-        "comment": "证书图片模糊，无法辨认颁发单位，请重新上传清晰照片。",
-        "note": "参加市级书画大赛，证书照片不够清晰。",
-    },
-    {
-        "title": "成都市少儿绘画比赛优秀奖",
-        "subject": StudentCertificate.SUBJECT_ART,
-        "issuer": "成都市教育局",
-        "image": "art_pending.png",
-        "status": StudentCertificate.STATUS_PENDING,
-        "comment": "",
-        "note": "参加市级绘画比赛获奖，请老师审核。",
-    },
-    {
-        "title": "四川省中小学生艺术展演声乐类三等奖",
-        "subject": StudentCertificate.SUBJECT_MUSIC,
-        "issuer": "四川省教育厅",
-        "image": "music_approved.png",
-        "status": StudentCertificate.STATUS_APPROVED,
-        "comment": "证书真实有效，审核通过。",
-        "note": "参加省级艺术展演声乐类获奖，已上传证书照片。",
-    },
-    {
-        "title": "成都市少儿书法大赛入围证书",
-        "subject": StudentCertificate.SUBJECT_ART,
-        "issuer": "成都市教育局",
-        "image": "art_rejected.png",
-        "status": StudentCertificate.STATUS_REJECTED,
-        "comment": "证书信息与本人不符，请重新上传。",
-        "note": "参加市级书法大赛入围，证书信息有误。",
-    },
+# 每班上传证书的 (状态, 学科) 轮换：保证 pending/approved/rejected 与音乐/美术都覆盖
+UPLOAD_SLOTS = [
+    (StudentCertificate.STATUS_PENDING, StudentCertificate.SUBJECT_MUSIC),
+    (StudentCertificate.STATUS_APPROVED, StudentCertificate.SUBJECT_ART),
+    (StudentCertificate.STATUS_REJECTED, StudentCertificate.SUBJECT_MUSIC),
+    (StudentCertificate.STATUS_PENDING, StudentCertificate.SUBJECT_ART),
+    (StudentCertificate.STATUS_APPROVED, StudentCertificate.SUBJECT_MUSIC),
+    (StudentCertificate.STATUS_REJECTED, StudentCertificate.SUBJECT_ART),
 ]
+
+# 按学科映射的颁发机构
+UPLOAD_ISSUER = {
+    StudentCertificate.SUBJECT_MUSIC: "成都市教育局",
+    StudentCertificate.SUBJECT_ART: "四川省教育厅",
+}
+
+# 按状态映射的备注与审核意见（note 不含 [演示数据] 前缀，运行时统一拼接）
+UPLOAD_NOTE = {
+    StudentCertificate.STATUS_PENDING: "参加艺术比赛获奖，请老师审核。",
+    StudentCertificate.STATUS_APPROVED: "已上传证书照片，请老师审核。",
+    StudentCertificate.STATUS_REJECTED: "证书照片不够清晰，请老师审核。",
+}
+UPLOAD_COMMENT = {
+    StudentCertificate.STATUS_APPROVED: "证书真实有效，审核通过。",
+    StudentCertificate.STATUS_REJECTED: "证书图片模糊，无法辨认颁发单位，请重新上传清晰照片。",
+}
 
 
 def _pick(ids, start, count):
@@ -114,38 +114,88 @@ def _default_font(size=22):
         return ImageFont.load_default()
 
 
+def _load_cjk_font(size=28):
+    """尝试加载中文字体，找不到返回 None（降级为英文模板）。"""
+    from PIL import ImageFont
+
+    for path in FONT_CANDIDATES:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
+    return None
+
+
+def _image_variant(subject, status, variant):
+    """按 (学科, 状态, 变体) 返回 (边框色, 背景色, 印章位置框)，保持同一版式。"""
+    width, height = 720, 480
+    border = {1: "#c9a227", 2: "#8a6d1a", 3: "#b08d2f"}[variant]
+    bg = {1: "#f5f0e6", 2: "#fbf7ef", 3: "#f2ecdd"}[variant]
+    if variant == 1:
+        seal = [width - 170, height - 170, width - 30, height - 30]  # 右下
+    elif variant == 2:
+        seal = [30, height - 170, 170, height - 30]                  # 左下
+    else:
+        seal = [width - 170, 30, width - 30, 170]                     # 右上
+    return border, bg, seal
+
+
 def _ensure_seed_images():
-    """生成 6 张共享模板图片（已存在则跳过），返回相对路径目录。"""
+    """生成 18 张共享模板图片（2 学科 × 3 状态 × 3 变体，已存在则跳过）。"""
     from PIL import Image, ImageDraw
 
     seed_dir = os.path.join(settings.MEDIA_ROOT, SEED_IMAGE_DIR)
     os.makedirs(seed_dir, exist_ok=True)
 
     width, height = 720, 480
+    cjk_font = _load_cjk_font(34)
+    cjk_sub = _load_cjk_font(22) if cjk_font else None
     font_title = _default_font(34)
     font_sub = _default_font(20)
 
-    for filename, (title, sub1, sub2) in SEED_IMAGES.items():
-        path = os.path.join(seed_dir, f"{filename}.png")
-        if os.path.exists(path):
-            continue
-        img = Image.new("RGB", (width, height), "#f5f0e6")  # 米白背景
-        draw = ImageDraw.Draw(img)
-        # 金色双边框
-        draw.rectangle([20, 20, width - 20, height - 20], outline="#c9a227", width=6)
-        draw.rectangle([30, 30, width - 30, height - 30], outline="#c9a227", width=2)
-        # 红色圆形印章（右下角）
-        draw.ellipse([width - 170, height - 170, width - 30, height - 30],
-                     outline="#c0392b", width=4)
-        # 英文文字（不依赖中文字体）
-        cx = width // 2
-        draw.text((cx - draw.textlength(title, font=font_title) // 2, 140), title,
-                  fill="#8a6d1a", font=font_title)
-        draw.text((cx - draw.textlength(sub1, font=font_sub) // 2, 240), sub1,
-                  fill="#333333", font=font_sub)
-        draw.text((cx - draw.textlength(sub2, font=font_sub) // 2, 280), sub2,
-                  fill="#333333", font=font_sub)
-        img.save(path)
+    for subject in (Paper.SUBJECT_MUSIC, Paper.SUBJECT_ART):
+        for status in (
+            StudentCertificate.STATUS_PENDING,
+            StudentCertificate.STATUS_APPROVED,
+            StudentCertificate.STATUS_REJECTED,
+        ):
+            for variant in (1, 2, 3):
+                filename = f"{subject}_{status}_{variant}.png"
+                path = os.path.join(seed_dir, filename)
+                if os.path.exists(path):
+                    continue
+
+                border_color, bg_color, seal_box = _image_variant(subject, status, variant)
+                img = Image.new("RGB", (width, height), bg_color)
+                draw = ImageDraw.Draw(img)
+                draw.rectangle([20, 20, width - 20, height - 20], outline=border_color, width=6)
+                draw.rectangle([30, 30, width - 30, height - 30], outline=border_color, width=2)
+                draw.ellipse(seal_box, outline="#c0392b", width=4)
+
+                cx = width // 2
+                if cjk_font:
+                    lines = ["艺术素质测评证书", "成都市教育局", "2026"]
+                    y = 150
+                    for idx, text in enumerate(lines):
+                        font = cjk_font if idx == 0 else cjk_sub
+                        draw.text((cx - draw.textlength(text, font=font) // 2, y), text,
+                                  fill="#8a6d1a" if idx == 0 else "#333333", font=font)
+                        y += 90
+                else:
+                    subject_label = "MUSIC" if subject == Paper.SUBJECT_MUSIC else "ART"
+                    title = f"{subject_label} CERTIFICATE"
+                    draw.text((cx - draw.textlength(title, font=font_title) // 2, 140), title,
+                              fill="#8a6d1a", font=font_title)
+                    draw.text(
+                        (cx - draw.textlength("Chengdu Primary & Secondary School", font=font_sub) // 2, 240),
+                        "Chengdu Primary & Secondary School", fill="#333333", font=font_sub,
+                    )
+                    draw.text(
+                        (cx - draw.textlength("Art Assessment 2026", font=font_sub) // 2, 280),
+                        "Art Assessment 2026", fill="#333333", font=font_sub,
+                    )
+                img.save(path)
 
     return seed_dir
 
@@ -303,26 +353,29 @@ class Command(BaseCommand):
         for i in range(uploads_per_class):
             if not student_ids:
                 break
-            tpl = UPLOAD_TEMPLATES[i % len(UPLOAD_TEMPLATES)]
+            status, subject = UPLOAD_SLOTS[i % len(UPLOAD_SLOTS)]
             sid = student_ids[i % len(student_ids)]
-            is_pending = tpl["status"] == StudentCertificate.STATUS_PENDING
+            titles = UPLOAD_TITLES[(subject, status)]
+            title = titles[sid % len(titles)]
+            variant = sid % 3 + 1
+            is_pending = status == StudentCertificate.STATUS_PENDING
             reviewer_id = None if is_pending else (
-                teacher_map.get((klass.id, tpl["subject"]))
+                teacher_map.get((klass.id, subject))
                 or head_map.get(klass.id)
                 or school_admin_id
             )
             records.append(StudentCertificate(
                 student_id=sid,
-                title=tpl["title"],
+                title=title,
                 cert_type=StudentCertificate.CERT_COMPETITION,
-                subject=tpl["subject"],
-                issuer=tpl["issuer"],
+                subject=subject,
+                issuer=UPLOAD_ISSUER[subject],
                 obtained_at=today - timedelta(days=60 + i * 30),
-                image=f"{SEED_IMAGE_DIR}/{tpl['image']}",
-                note=f"[演示数据] {tpl['note']}",
-                status=tpl["status"],
+                image=f"{SEED_IMAGE_DIR}/{subject}_{status}_{variant}.png",
+                note=f"[演示数据] {UPLOAD_NOTE[status]}",
+                status=status,
                 reviewer_id=reviewer_id,
-                review_comment="" if is_pending else tpl["comment"],
+                review_comment="" if is_pending else UPLOAD_COMMENT[status],
                 reviewed_at=None if is_pending else now,
             ))
 
@@ -404,7 +457,7 @@ class Command(BaseCommand):
             raise CommandError("--reset 必须同时传 --yes 确认（上面列出了将被删除的数量）")
         papers_qs.delete()
         scs_qs.delete()
-        self.stdout.write(self.style.SUCCESS("清理完成（共享模板图片已保留，便于下次复用）。"))
+        self.stdout.write(self.style.SUCCESS("清理完成，继续生成……"))
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
@@ -428,8 +481,8 @@ class Command(BaseCommand):
         school_ids = [s.id for s in schools]
 
         if reset:
+            # 不带 --yes 只打印数量并退出；带 --yes 删除后继续执行本次生成
             self._do_reset(school_ids, yes)
-            return
 
         now = timezone.now()
         today = date.today()
@@ -459,7 +512,7 @@ class Command(BaseCommand):
                     u = min(uploads_per_class, n)
                     upload_count += u
                     for i in range(u):
-                        uploads_by_status[UPLOAD_TEMPLATES[i % len(UPLOAD_TEMPLATES)]["status"]] += 1
+                        uploads_by_status[UPLOAD_SLOTS[i % len(UPLOAD_SLOTS)][0]] += 1
 
             self.stdout.write(f"  学校：{school_count} 所（跳过无管理员/教师的 {skipped} 所）")
             self.stdout.write(f"  班级：{class_count} 个")
