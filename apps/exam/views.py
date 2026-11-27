@@ -108,6 +108,10 @@ class PaperViewSet(BaseViewSet):
             return PaperDetailSerializer
         return PaperSerializer
 
+    def perform_create(self, serializer):
+        """creator 由后端注入（防止伪造归属）。"""
+        serializer.save(creator=self.request.user)
+
     def get_queryset(self):
         qs = _apply_paper_scope(self.request.user, super().get_queryset())
         params = self.request.query_params
