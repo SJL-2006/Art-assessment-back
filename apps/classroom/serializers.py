@@ -1,7 +1,7 @@
 """班级相关序列化器。"""
 from rest_framework import serializers
 
-from apps.classroom.models import ClassRoom, ClassStudent, ClassTeacher
+from apps.classroom.models import ClassCourse, ClassRoom, ClassStudent, ClassTeacher
 
 
 class ClassRoomSerializer(serializers.ModelSerializer):
@@ -40,6 +40,23 @@ class ClassTeacherSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClassTeacher
         fields = "__all__"
+
+
+class ClassCourseSerializer(serializers.ModelSerializer):
+    """班级课程序列化器。"""
+    class_name = serializers.CharField(source="class_room.name", read_only=True, default="")
+    course_name = serializers.CharField(source="course.name", read_only=True, default="")
+    course_code = serializers.CharField(source="course.code", read_only=True, default="")
+    course_description = serializers.CharField(source="course.description", read_only=True, default="")
+    published_by_name = serializers.CharField(source="published_by.real_name", read_only=True, default="")
+
+    class Meta:
+        model = ClassCourse
+        fields = (
+            "id", "class_room", "class_name",
+            "course", "course_name", "course_code", "course_description",
+            "published_by", "published_by_name", "created_at",
+        )
 
 
 class JoinClassSerializer(serializers.Serializer):

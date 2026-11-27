@@ -68,3 +68,24 @@ class ClassTeacher(BaseModel):
         db_table = "classroom_class_teacher"
         verbose_name = "班级教师"
         unique_together = [("klass", "teacher", "course")]
+
+
+class ClassCourse(BaseModel):
+    """班级课程：教师把题库课程发布给班级。"""
+    class_room = models.ForeignKey(
+        ClassRoom, on_delete=models.CASCADE, related_name="courses", verbose_name="班级",
+    )
+    course = models.ForeignKey(
+        "questionbank.Course", on_delete=models.CASCADE, related_name="class_links", verbose_name="课程",
+    )
+    published_by = models.ForeignKey(
+        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="published_courses", verbose_name="发布人",
+    )
+
+    class Meta:
+        db_table = "classroom_class_course"
+        verbose_name = "班级课程"
+        verbose_name_plural = "班级课程"
+        unique_together = [("class_room", "course")]
+        ordering = ["-created_at"]

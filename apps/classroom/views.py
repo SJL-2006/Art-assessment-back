@@ -16,11 +16,12 @@ from rest_framework.decorators import action
 
 from apps.classroom.models import (
     PENDING, APPROVED, REJECTED,
-    ClassRoom, ClassStudent, ClassTeacher,
+    ClassCourse, ClassRoom, ClassStudent, ClassTeacher,
 )
 from apps.classroom.serializers import (
     ApproveResultSerializer,
     ChangeClassSerializer,
+    ClassCourseSerializer,
     ClassRoomSerializer,
     ClassStudentSerializer,
     ClassTeacherSerializer,
@@ -74,8 +75,15 @@ class ClassRoomViewSet(BaseViewSet):
         if self.action == "retrieve":
             return [permissions.IsAuthenticated()]
         # 学生/教师通用只读 action（查我的班级、搜索班级）
-        if self.action in ("my_class", "search"):
+        if self.action in ("my_class", "search", "my_courses"):
             return [permissions.IsAuthenticated()]
+        # 班级课程：GET 允许班级成员（在 action 内校验），POST/DELETE 仅教师
+        if self.action == "courses":
+            if self.request.method == "POST":
+                return [has_role(User.ROLE_TEACHER)()]
+            return [permissions.IsAuthenticated()]
+        if self.action == "unpublish_course":
+            return [has_role(User.ROLE_TEACHER)()]
         # 学生专属 action
         if self.action in ("join", "quit", "change"):
             return [has_role(User.ROLE_STUDENT)()]
@@ -147,6 +155,22 @@ class ClassRoomViewSet(BaseViewSet):
         if not klass:
             raise ApiException("班级不存在", code=404, status=404)
         return klass
+
+    @staticmethod
+    def _is_class_teacher(klass, user) -> bool:
+        """是否为该班级的班主任或已审核通过的科任教师。"""
+        if klass.head_teacher_id == user.id:
+            return True
+        return ClassTeacher.objects.filter(
+            klass=klass, teacher=user, status=APPROVED, is_deleted=False,
+        ).exists()
+
+    @staticmethod
+    def _is_class_student(klass, user) -> bool:
+        """是否为该班级已审核通过的学生。"""
+        return ClassStudent.objects.filter(
+            klass=klass, student=user, status=APPROVED, is_deleted=False,
+        ).exists()
 
     # -------------------- 学生查询自己的班级 --------------------
 
@@ -378,6 +402,107 @@ class ClassRoomViewSet(BaseViewSet):
             {"created": created, "skipped": skipped, "total": users.count()},
             message=f"导入完成：成功 {created} 人，跳过 {skipped} 人",
         )
+
+
+    # -------------------- 班级课程：查询 / 发布 --------------------
+
+    @action(detail=True, methods=["get", "post"], url_path="courses")
+    def courses(self, request, pk=None):
+        """GET 查看班级已发布课程；POST 发布课程到班级。"""
+        klass = self._get_raw_class(pk)
+
+        if request.method == "GET":
+            if not (
+                self._is_class_teacher(klass, request.user)
+                or self._is_class_student(klass, request.user)
+            ):
+                raise ApiException("只有本班成员可查看班级课程", code=403, status=403)
+            qs = (
+                ClassCourse.objects.filter(class_room=klass, is_deleted=False)
+                .select_related("class_room", "course", "published_by")
+            )
+            data = ClassCourseSerializer(qs, many=True).data
+            return ApiResponse({"list": data, "total": len(data)})
+
+        if not self._is_class_teacher(klass, request.user):
+            raise ApiException("只有该班级的班主任或科任教师能发布课程", code=403, status=403)
+
+        from apps.questionbank.models import Course
+        course_id = request.data.get("course") or request.data.get("course_id")
+        if not course_id:
+            raise ApiException("请选择要发布的课程", code=400, status=400)
+        course = Course.objects.filter(pk=course_id, is_deleted=False).first()
+        if course is None:
+            raise ApiException("课程不存在", code=400, status=400)
+
+        link = ClassCourse.objects.filter(class_room=klass, course=course).first()
+        if link:
+            if not link.is_deleted:
+                raise ApiException("该课程已发布", code=400, status=400)
+            # 取消发布后重新发布：复用原记录，发布时间按本次发布刷新
+            link.is_deleted = False
+            link.deleted_at = None
+            link.published_by = request.user
+            link.created_at = timezone.now()
+            link.save(update_fields=[
+                "is_deleted", "deleted_at", "published_by", "created_at", "updated_at",
+            ])
+            return ApiResponse(ClassCourseSerializer(link).data, message="发布成功", status=201)
+
+        link = ClassCourse.objects.create(class_room=klass, course=course, published_by=request.user)
+        return ApiResponse(ClassCourseSerializer(link).data, message="发布成功", status=201)
+
+    # -------------------- 取消发布 --------------------
+
+    @action(detail=True, methods=["delete"], url_path=r"courses/(?P<course_id>\d+)")
+    def unpublish_course(self, request, pk=None, course_id=None):
+        """取消发布：按课程 ID 软删除班级课程关系。"""
+        klass = self._get_raw_class(pk)
+        if not self._is_class_teacher(klass, request.user):
+            raise ApiException("只有该班级的班主任或科任教师能取消发布", code=403, status=403)
+
+        link = ClassCourse.objects.filter(
+            class_room=klass, course_id=course_id, is_deleted=False,
+        ).first()
+        if not link:
+            raise ApiException("该班级未发布此课程", code=404, status=404)
+
+        link.is_deleted = True
+        link.deleted_at = timezone.now()
+        link.save(update_fields=["is_deleted", "deleted_at", "updated_at"])
+        return ApiResponse(None, message="已取消发布")
+
+    # -------------------- 我的班级课程 --------------------
+
+    @action(detail=False, methods=["get"], url_path="my/courses")
+    def my_courses(self, request):
+        """学生：所在班级已发布的课程；教师：其任教班级已发布的课程。"""
+        user = request.user
+        if user.role == User.ROLE_STUDENT:
+            class_ids = ClassStudent.objects.filter(
+                student=user, status=APPROVED, is_deleted=False,
+            ).values_list("klass_id", flat=True)
+        elif user.role == User.ROLE_TEACHER:
+            head_ids = ClassRoom.objects.filter(
+                head_teacher=user, is_deleted=False,
+            ).values_list("id", flat=True)
+            subject_ids = ClassTeacher.objects.filter(
+                teacher=user, status=APPROVED, is_deleted=False,
+            ).values_list("klass_id", flat=True)
+            class_ids = set(head_ids) | set(subject_ids)
+        else:
+            raise ApiException("仅教师或学生可查看", code=403, status=403)
+
+        qs = (
+            ClassCourse.objects.filter(
+                class_room_id__in=class_ids,
+                class_room__is_deleted=False,
+                is_deleted=False,
+            )
+            .select_related("class_room", "course", "published_by")
+        )
+        data = ClassCourseSerializer(qs, many=True).data
+        return ApiResponse({"list": data, "total": len(data)})
 
 
 class ClassStudentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):

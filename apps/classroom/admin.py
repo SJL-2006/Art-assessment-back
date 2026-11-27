@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.classroom.models import ClassRoom, ClassStudent, ClassTeacher
+from apps.classroom.models import ClassCourse, ClassRoom, ClassStudent, ClassTeacher
 
 
 @admin.register(ClassRoom)
@@ -20,3 +20,9 @@ class ClassStudentAdmin(admin.ModelAdmin):
 class ClassTeacherAdmin(admin.ModelAdmin):
     list_display = ("id", "klass", "teacher", "course", "status")
     list_filter = ("status",)
+
+
+@admin.register(ClassCourse)
+class ClassCourseAdmin(admin.ModelAdmin):
+    list_display = ("id", "class_room", "course", "published_by", "created_at")
+    search_fields = ("class_room__name", "course__name")
