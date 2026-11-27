@@ -80,15 +80,28 @@ def normalize_subject(value):
 
 
 def _apply_paper_scope(user, qs):
-    """按角色收敛试卷数据范围：教师→自建，学校/区县/市→创建人所属范围，省/超管→全部。"""
+    """按角色收敛试卷数据范围。
+
+    除按管辖范围过滤外，始终保留本人创建的试卷，
+    避免区县/市州管理员（没有 school）看不到自己刚创建的试卷。
+    """
     if user.is_superuser or user.role == User.ROLE_PROVINCE:
         return qs
     if user.role == User.ROLE_CITY:
-        return qs.filter(creator__school__region_id__in=services.visible_region_ids(user))
+        region_ids = services.visible_region_ids(user)
+        return qs.filter(
+            Q(creator=user)
+            | Q(creator__school__region_id__in=region_ids)
+            | Q(creator__region_id__in=region_ids)
+        )
     if user.role == User.ROLE_DISTRICT:
-        return qs.filter(creator__school__region_id=user.region_id)
+        return qs.filter(
+            Q(creator=user)
+            | Q(creator__school__region_id=user.region_id)
+            | Q(creator__region_id=user.region_id)
+        )
     if user.role == User.ROLE_SCHOOL:
-        return qs.filter(creator__school_id=user.school_id)
+        return qs.filter(Q(creator=user) | Q(creator__school_id=user.school_id))
     if user.role == User.ROLE_TEACHER:
         return qs.filter(creator=user)
     return qs.none()
@@ -124,6 +137,10 @@ class PaperViewSet(BaseViewSet):
                     value = normalize_subject(value)
                 qs = qs.filter(**{field: value})
         return qs
+
+    def perform_create(self, serializer):
+        """试卷创建人由后端注入，禁止前端伪造 creator。"""
+        serializer.save(creator=self.request.user)
 
     @staticmethod
     def _resolve_course(subject):
