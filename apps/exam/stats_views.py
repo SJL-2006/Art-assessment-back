@@ -20,8 +20,8 @@ STATS_ROLES = has_role(
 )
 
 
-def _filtered_sheets(request):
-    """按账号层级 + 查询参数收敛答卷范围。"""
+def _scoped_students(request):
+    """按账号层级 + 查询参数收敛学生范围（同时作为参与率分母）。"""
     user = request.user
     params = request.query_params
     students = services.scoped_students(user)
@@ -52,8 +52,14 @@ def _filtered_sheets(request):
         students = students.filter(
             class_memberships__klass__grade__in=services.grade_variants(grade),
             class_memberships__status=services.APPROVED,
-        )
+        ).distinct()
 
+    return students
+
+
+def _filtered_sheets(request, students):
+    """按账号层级 + 查询参数收敛答卷范围。"""
+    params = request.query_params
     sheets = (
         AnswerSheet.objects.filter(is_submitted=True, is_deleted=False, student__in=students)
         .select_related("paper", "student", "student__school", "student__school__region")
@@ -65,6 +71,29 @@ def _filtered_sheets(request):
     if ptype:
         sheets = sheets.filter(paper__ptype=ptype)
     return sheets
+
+
+def _expected_by(students, field):
+    """按分组字段统计应测学生数（同一学生只计一次）。"""
+    rows = (
+        students.order_by()
+        .values(field)
+        .annotate(total=Count("id", distinct=True))
+        .values_list(field, "total")
+    )
+    return {label: total for label, total in rows if label}
+
+
+def _expected_by_grade(students):
+    """按归一化年级统计应测学生数（多班级学生只计一次）。"""
+    buckets = {}
+    rows = students.order_by().values_list("id", "class_memberships__klass__grade")
+    for student_id, grade in rows:
+        label = services.normalize_grade_label(grade)
+        if not label:
+            continue
+        buckets.setdefault(label, set()).add(student_id)
+    return {label: len(ids) for label, ids in buckets.items()}
 
 
 def _summary(sheets, students):
@@ -97,7 +126,7 @@ def _summary(sheets, students):
     }, rows
 
 
-def _group(rows, key_func, label_func, students_total=None):
+def _group(rows, key_func, label_func, expected_map=None):
     bucket = {}
     for row in rows:
         key = key_func(row)
@@ -122,11 +151,14 @@ def _group(rows, key_func, label_func, students_total=None):
     result = []
     for item in bucket.values():
         rates = item["rates"]
+        expected = (expected_map or {}).get(item["label"]) or 0
         result.append({
             "key": item["key"],
             "label": item["label"],
             "participant_count": len(item["student_ids"]),
             "submission_count": item["submissions"],
+            "expected_count": expected,
+            "participation_rate": round(len(item["student_ids"]) / expected, 4) if expected else None,
             "average_score_rate": round(sum(rates) / len(rates), 4) if rates else 0,
             "pass_rate": round(item["pass"] / len(rates), 4) if rates else 0,
         })
@@ -142,40 +174,41 @@ def _build_stats(request):
     # 先兜底提交已到期的未交答卷，避免学生超时未交导致漏统计、漏发证书
     services.auto_submit_overdue_sheets()
 
-    sheets = _filtered_sheets(request)
-    students = services.scoped_students(request.user)
-    params = request.query_params
-    school_id = params.get("school_id")
-    if school_id:
-        students = students.filter(school_id=school_id)
-    region_id = params.get("region_id")
-    if region_id:
-        students = students.filter(school__region_id=region_id)
+    students = _scoped_students(request)
+    sheets = _filtered_sheets(request, students)
 
     summary, rows = _summary(sheets, students)
-    by_subject = _group(rows, lambda r: r["paper__subject"], lambda r: _subject_label(r["paper__subject"]))
+    student_total = summary["student_total"]
+    by_subject = _group(
+        rows,
+        lambda r: r["paper__subject"],
+        lambda r: _subject_label(r["paper__subject"]),
+        expected_map={_subject_label(code): student_total for code in ("music", "art")},
+    )
     by_grade = _group(
         rows,
         lambda r: services.normalize_grade_label(r["paper__grade"]) or "未填年级",
         lambda r: services.normalize_grade_label(r["paper__grade"]) or "未填年级",
+        expected_map=_expected_by_grade(students),
     )
-    by_school = _group(rows, lambda r: r["student__school__name"] or "",
-                       lambda r: r["student__school__name"] or "")
-    by_region = _group(rows, lambda r: r["student__school__region__name"] or "未填地区",
-                       lambda r: r["student__school__region__name"] or "未填地区")
-    by_city = _group(rows, lambda r: r["student__school__region__parent__name"] or "未填市州",
-                     lambda r: r["student__school__region__parent__name"] or "未填市州")
-    # 市州应参与学生数，供前端计算参与率（参与人数 / 应参与人数）
-    expected_by_city = {
-        row["school__region__parent__name"] or "未填市州": row["total"]
-        for row in students.values("school__region__parent__name").annotate(total=Count("id"))
-    }
-    for item in by_city:
-        expected = expected_by_city.get(item["label"], 0)
-        item["expected_count"] = expected
-        item["participation_rate"] = (
-            round(item["participant_count"] / expected, 4) if expected else 0
-        )
+    by_school = _group(
+        rows,
+        lambda r: r["student__school__name"] or "",
+        lambda r: r["student__school__name"] or "",
+        expected_map=_expected_by(students, "school__name"),
+    )
+    by_region = _group(
+        rows,
+        lambda r: r["student__school__region__name"] or "未填地区",
+        lambda r: r["student__school__region__name"] or "未填地区",
+        expected_map=_expected_by(students, "school__region__name"),
+    )
+    by_city = _group(
+        rows,
+        lambda r: r["student__school__region__parent__name"] or "未填市州",
+        lambda r: r["student__school__region__parent__name"] or "未填市州",
+        expected_map=_expected_by(students, "school__region__parent__name"),
+    )
     return {
         "summary": summary,
         "by_subject": by_subject,
