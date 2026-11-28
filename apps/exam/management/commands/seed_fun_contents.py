@@ -1,11 +1,11 @@
-"""seed_fun_contents：补全趣味课堂内容（10 篇中文艺术科普）并清理占位数据。
+"""seed_fun_contents：把学习材料名称改高级（占位/口语标题替换为 10 篇正式中文艺术材料）。
 
 用法示例：
     python manage.py seed_fun_contents --dry-run
     python manage.py seed_fun_contents
 
-只写 FunContent 数据（update_or_create 幂等 + 占位记录软删除），不改模型、不需要迁移；
-subject 只用 music / art / general，emoji 用真实表情，状态 published，省级全员可见。
+只写 FunContent 数据（update_or_create 幂等 + 占位记录软删除），不改模型、不需要迁移、不改前端样式；
+subject 只用 music / art / general，category 用正式分类，emoji 用真实表情，status=published，全省学生可见。
 """
 from django.core.management.base import BaseCommand
 from django.db.models import Q
@@ -16,10 +16,10 @@ from apps.users.models import User
 
 ARTICLES = [
     {
-        "title": "音乐如何影响人的情绪与记忆",
+        "title": "音乐与情绪：旋律如何塑造心理感受",
         "subject": "music",
         "category": "音乐欣赏",
-        "summary": "从旋律、节奏和和声入手，理解音乐与情绪、记忆之间的联系。",
+        "summary": "从旋律、节奏与和声入手，理解音乐如何影响情绪体验与记忆。",
         "content": (
             "音乐通过旋律的起伏、节奏的快慢和和声的松紧，影响人的呼吸、心跳与情绪体验。"
             "舒缓的旋律常让人放松，明亮的节奏更容易带来愉悦感。"
@@ -31,7 +31,7 @@ ARTICLES = [
         "read_minutes": 3,
     },
     {
-        "title": "艺术教育对青少年成长的意义",
+        "title": "艺术的价值：从审美经验到人格养成",
         "subject": "general",
         "category": "艺术素养",
         "summary": "艺术学习不只是技能训练，也影响观察、表达与审美判断。",
@@ -46,10 +46,10 @@ ARTICLES = [
         "read_minutes": 3,
     },
     {
-        "title": "从敦煌壁画看中国传统色彩",
+        "title": "敦煌壁画中的东方色彩体系",
         "subject": "art",
         "category": "美术鉴赏",
-        "summary": "敦煌壁画中的石青、石绿、土红等矿物颜料，构成了独特的东方色彩体系。",
+        "summary": "石青、石绿、土红等矿物颜料，构成了敦煌壁画独特的色彩语言。",
         "content": (
             "敦煌壁画历经千年，色彩依然鲜明，这与矿物颜料的使用密切相关。"
             "石青、石绿、土红、赭石等颜色来自天然矿物，稳定性强。"
@@ -61,10 +61,10 @@ ARTICLES = [
         "read_minutes": 4,
     },
     {
-        "title": "交响乐队中的乐器家族",
+        "title": "交响乐队的声部构成与音色层次",
         "subject": "music",
         "category": "音乐欣赏",
-        "summary": "弦乐、木管、铜管和打击乐四个家族，共同构成交响乐队。",
+        "summary": "弦乐、木管、铜管与打击乐四个声部，共同构成交响乐队。",
         "content": (
             "交响乐队通常由弦乐、木管、铜管和打击乐四个声部组成。"
             "弦乐组人数最多，音色统一；木管组善于表现不同的色彩；铜管组音量宏大；"
@@ -76,7 +76,7 @@ ARTICLES = [
         "read_minutes": 3,
     },
     {
-        "title": "中国民族乐器的分类与音色",
+        "title": "中国民族乐器的分类与音色特征",
         "subject": "music",
         "category": "民族音乐",
         "summary": "吹、拉、弹、打四类民族乐器，构成中国音乐独特的音色。",
@@ -92,10 +92,10 @@ ARTICLES = [
         "read_minutes": 4,
     },
     {
-        "title": "《清明上河图》中的宋代生活",
+        "title": "《清明上河图》中的宋代市井生活",
         "subject": "art",
         "category": "美术鉴赏",
-        "summary": "通过画卷中的人物、建筑和市集，观察北宋城市的日常生活。",
+        "summary": "通过人物、建筑与市集，观察北宋城市的日常生活。",
         "content": (
             "《清明上河图》以长卷形式描绘北宋汴京的城市生活。"
             "画中有桥梁、船只、店铺、车马和大量人物，细节丰富。"
@@ -108,7 +108,7 @@ ARTICLES = [
         "read_minutes": 5,
     },
     {
-        "title": "京剧脸谱的色彩象征",
+        "title": "京剧脸谱的色彩象征与舞台语言",
         "subject": "art",
         "category": "传统文化",
         "summary": "红、黑、白、蓝等脸谱颜色，在京剧中有相对固定的象征意义。",
@@ -123,7 +123,7 @@ ARTICLES = [
         "read_minutes": 3,
     },
     {
-        "title": "如何欣赏一幅中国山水画",
+        "title": "中国山水画的观看方式与留白",
         "subject": "art",
         "category": "美术鉴赏",
         "summary": "从构图、笔墨和留白入手，理解山水画中的观看方式。",
@@ -138,7 +138,7 @@ ARTICLES = [
         "read_minutes": 4,
     },
     {
-        "title": "音乐中的节拍与节奏有什么区别",
+        "title": "节拍与节奏：音乐时间组织的两个维度",
         "subject": "music",
         "category": "乐理常识",
         "summary": "节拍提供稳定的时间框架，节奏则是具体声音的长短组合。",
@@ -153,7 +153,7 @@ ARTICLES = [
         "read_minutes": 2,
     },
     {
-        "title": "透视法：让画面产生空间感",
+        "title": "透视法：绘画空间的表现逻辑",
         "subject": "art",
         "category": "造型基础",
         "summary": "近大远小、消失点和视平线，是绘画中表现空间的基本方法。",
@@ -169,21 +169,20 @@ ARTICLES = [
     },
 ]
 
-PLACEHOLDER_EMOJIS = ["music-note", "mix-star", "art-palette", "art-brush"]
-ARTICLE_TITLES = [a["title"] for a in ARTICLES]
+SLUG_EMOJIS = ["music-note", "mix-star", "art-palette", "art-brush"]
+NEW_TITLES = [a["title"] for a in ARTICLES]
 
 
 def _placeholder_qs():
-    """返回需要清理的占位记录 queryset（数字标题 / 英文 slug 封面且非本次标题）。"""
+    """返回需要软删除的旧占位记录（纯数字标题 / 英文 slug 封面，且非本次标题）。"""
     return FunContent.objects.filter(
         Q(title__regex=r"^\d+$")
-        | Q(title__in=["1", "2"])
-        | Q(emoji__in=PLACEHOLDER_EMOJIS)
-    ).exclude(title__in=ARTICLE_TITLES)
+        | Q(emoji__in=SLUG_EMOJIS)
+    ).exclude(title__in=NEW_TITLES)
 
 
 class Command(BaseCommand):
-    help = "补全趣味课堂内容（10 篇中文艺术科普）并软删除占位记录。"
+    help = "把学习材料名称改高级：替换为 10 篇正式中文艺术材料并软删除占位记录。"
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true", help="只统计将新增/更新/清理的数量，不写库")
@@ -199,7 +198,6 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         creator = self._resolve_creator()
 
-        # 统计新增/更新
         to_create = []
         to_update = []
         for item in ARTICLES:
@@ -211,10 +209,10 @@ class Command(BaseCommand):
         placeholder_qs = _placeholder_qs()
         placeholders = placeholder_qs.count()
 
-        self.stdout.write(self.style.SUCCESS("趣味课堂内容补全：" + ("（--dry-run，未写库）" if dry_run else "")))
+        self.stdout.write(self.style.SUCCESS("学习材料更新：" + ("（--dry-run，未写库）" if dry_run else "")))
         self.stdout.write(f"  新增：{len(to_create)} 篇")
         self.stdout.write(f"  更新：{len(to_update)} 篇")
-        self.stdout.write(f"  清理占位：{placeholders} 篇")
+        self.stdout.write(f"  清理旧占位：{placeholders} 篇")
 
         if dry_run:
             published = FunContent.objects.filter(status=FunContent.STATUS_PUBLISHED, is_deleted=False).count()
@@ -227,10 +225,10 @@ class Command(BaseCommand):
                     self.stdout.write(f"    #{f.id} {f.title!r} emoji={f.emoji!r}")
             return
 
-        # 清理占位（软删除，不硬删，避免误删老师自建内容）
+        # 清理旧占位（软删除，不硬删、不按 category 批量删，避免误伤老师自建内容）
         if placeholders:
             placeholder_qs.update(is_deleted=True, deleted_at=timezone.now())
-            self.stdout.write(self.style.WARNING(f"已软删除占位记录 {placeholders} 篇"))
+            self.stdout.write(self.style.WARNING(f"已软删除旧占位记录 {placeholders} 篇"))
 
         # 写入 10 篇（update_or_create 幂等）
         if creator is None:
