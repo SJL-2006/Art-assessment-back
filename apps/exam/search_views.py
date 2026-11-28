@@ -121,6 +121,7 @@ class GlobalSearchView(APIView):
                     "school_name": c.school.name if c.school else "",
                     "student_count": c.students.filter(is_deleted=False, status=APPROVED).count(),
                     "head_teacher_name": c.head_teacher.real_name or c.head_teacher.username if c.head_teacher else "",
+                    "target": f"/classroom/{c.id}",
                 }
                 for c in qs[:30]
             ]
@@ -146,6 +147,7 @@ class GlobalSearchView(APIView):
                     "status": p.status,
                     "question_count": p.paper_questions.count(),
                     "creator_name": p.creator.real_name or p.creator.username if p.creator else "",
+                    "target": f"/exam/papers/{p.id}",
                 }
                 for p in qs[:30]
             ]
@@ -178,6 +180,7 @@ class GlobalSearchView(APIView):
                             is_deleted=False,
                         ).values_list("name", flat=True)
                     ),
+                    "target": f"/exam/students/{s.id}/scores",
                 }
                 for s in stu_qs[:30]
             ]

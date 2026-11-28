@@ -558,6 +558,17 @@ class TeacherExtracurricularListView(APIView):
                 ).values_list("student_id", flat=True)
             )
 
+        # 关键词搜索：标题 / 说明 / 学生姓名
+        kw = (request.GET.get("q") or "").strip()
+        if kw:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(title__icontains=kw)
+                | Q(description__icontains=kw)
+                | Q(student__real_name__icontains=kw)
+                | Q(student__username__icontains=kw)
+            )
+
         qs = qs.order_by("-created_at")
 
         # 分页
