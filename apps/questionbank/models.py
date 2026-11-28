@@ -77,7 +77,11 @@ class Question(BaseModel):
     options = models.JSONField("选项", default=list, blank=True)  # [{"key": "A", "text": "..."}]
     answer = models.TextField("参考答案", blank=True)
     analysis = models.TextField("解析", blank=True)
-    score = models.DecimalField("分值", max_digits=5, decimal_places=2, default=1)
+    score = models.DecimalField(
+        "题目参考分值", max_digits=5, decimal_places=2,
+        null=True, blank=True, default=None,
+        help_text="创建题目时可不填，组卷时由教师赋分。若组卷时教师未指定，将使用此值或默认 1 分。",
+    )
     status = models.CharField("状态", max_length=16, choices=STATUS_CHOICES, default=STATUS_DRAFT)
     creator = models.ForeignKey(
         "users.User", on_delete=models.SET_NULL, null=True, blank=True,

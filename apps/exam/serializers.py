@@ -33,9 +33,22 @@ class PaperSerializer(serializers.ModelSerializer):
 
 
 class PaperQuestionSerializer(serializers.ModelSerializer):
+    score = serializers.DecimalField(
+        max_digits=5, decimal_places=2, required=False, allow_null=True,
+        help_text="组卷时可不填：会优先取题目自带分值，都没有时默认 1 分",
+    )
+
     class Meta:
         model = PaperQuestion
         fields = "__all__"
+
+    def create(self, validated_data):
+        # 教师没传 score → 用题目自带的 score → 都没有默认 1
+        score = validated_data.get("score")
+        if score is None:
+            question = validated_data.get("question")
+            validated_data["score"] = question.score if question and question.score is not None else 1
+        return super().create(validated_data)
 
 
 class PaperQuestionDetailSerializer(serializers.ModelSerializer):

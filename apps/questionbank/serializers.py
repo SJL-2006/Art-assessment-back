@@ -33,6 +33,10 @@ class QuestionSerializer(serializers.ModelSerializer):
     chapter_name = serializers.CharField(source="chapter.name", read_only=True)
     creator_name = serializers.SerializerMethodField()
     creator_role = serializers.SerializerMethodField()
+    score = serializers.DecimalField(
+        max_digits=5, decimal_places=2, required=False, allow_null=True,
+        help_text="可选。组卷时由教师为每道题赋分，此字段可留空。",
+    )
 
     class Meta:
         model = Question
