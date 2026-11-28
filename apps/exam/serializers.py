@@ -27,6 +27,7 @@ class PaperSerializer(serializers.ModelSerializer):
     class Meta:
         model = Paper
         fields = "__all__"
+        read_only_fields = ["creator"]
 
     def get_question_count(self, obj) -> int:
         return obj.paper_questions.count()
