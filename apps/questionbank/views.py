@@ -4,6 +4,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 
+from apps.classroom.models import APPROVED, ClassTeacher
 from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
 from apps.common.response import ApiResponse, ErrorCode
@@ -41,6 +42,18 @@ class CourseViewSet(BaseViewSet):
         if self.action in ("list", "retrieve"):
             return [has_role(*CATALOG_READ_ROLES)()]
         return [has_role(User.ROLE_QB_ADMIN)()]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # 教师只看自己任教的学科（按已审核的 ClassTeacher.course 收敛）；管理端不受限
+        user = self.request.user
+        if user.role == User.ROLE_TEACHER:
+            course_ids = ClassTeacher.objects.filter(
+                teacher=user, status=APPROVED, is_deleted=False,
+            ).exclude(course_id=None).values_list("course_id", flat=True)
+            if course_ids:
+                qs = qs.filter(id__in=course_ids)
+        return qs
 
 
 class ChapterViewSet(BaseViewSet):

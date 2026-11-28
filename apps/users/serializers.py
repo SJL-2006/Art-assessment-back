@@ -47,6 +47,9 @@ class UserSerializer(serializers.ModelSerializer):
     region_name = serializers.SerializerMethodField()
     classes = serializers.SerializerMethodField()
     class_name = serializers.SerializerMethodField()
+    teacher_type_display = serializers.CharField(source="get_teacher_type_display", read_only=True)
+    teacher_subject = serializers.CharField(read_only=True)
+    teacher_subject_display = serializers.CharField(source="get_teacher_subject_display", read_only=True)
 
     class Meta:
         model = User
@@ -54,11 +57,12 @@ class UserSerializer(serializers.ModelSerializer):
             "id", "username", "real_name", "phone", "avatar", "role", "role_display",
             "student_no", "staff_no", "school", "school_name", "school_code",
             "region", "region_name", "classes", "class_name", "email", "date_joined",
+            "teacher_type", "teacher_type_display", "teacher_subject", "teacher_subject_display",
         ]
         read_only_fields = [
             "id", "username", "role", "date_joined",
-            # 身份字段不允许个人自助修改，避免学生改写学籍号 / 教师改写职工编号 / 换学校
-            "school", "region", "student_no", "staff_no",
+            # 身份字段不允许个人自助修改，避免学生改写学籍号 / 教师改写职工编号 / 换学校 / 改任教学科
+            "school", "region", "student_no", "staff_no", "teacher_type", "teacher_subject",
         ]
 
     # ---- 展示字段：头像返回相对路径，避免 HTTPS 反向代理下出现混合内容 ----
@@ -146,14 +150,25 @@ def validate_role_creation(caller, target_role):
 class AccountManageSerializer(serializers.ModelSerializer):
     """#28-32 后台账号管理：role 由调用方指定，字段随 role 而异。"""
 
+    school_name = serializers.SerializerMethodField()
+    region_name = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
             "id", "username", "password", "real_name", "phone", "avatar",
-            "role", "student_no", "staff_no", "school", "region", "email", "is_active", "date_joined",
+            "role", "student_no", "staff_no", "school", "school_name",
+            "region", "region_name", "email", "is_active", "date_joined",
+            "teacher_type", "teacher_subject",
         ]
         read_only_fields = ["id", "date_joined"]
         extra_kwargs = {"password": {"write_only": True, "required": False}}
+
+    def get_school_name(self, obj):
+        return obj.school.name if obj.school_id else ""
+
+    def get_region_name(self, obj):
+        return obj.region.name if obj.region_id else ""
 
     def validate_role(self, value):
         request = self.context.get("request")

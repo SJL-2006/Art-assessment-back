@@ -8,7 +8,7 @@
 from rest_framework import permissions
 
 from apps.common.permissions import has_role
-from apps.common.scopes import filter_by_scope
+from apps.common.scopes import filter_by_scope, get_descendant_region_ids
 from apps.common.views import BaseViewSet
 from apps.org.models import Region, School
 from apps.org.serializers import RegionSerializer, SchoolSerializer
@@ -45,9 +45,14 @@ class RegionViewSet(BaseViewSet):
         level = self.request.query_params.get("level")
         if level:
             qs = qs.filter(level=level)
-        # 按当前用户 scope 收敛（非省级只能看自己范围）
-        qs = filter_by_scope(qs, self.request.user, region_field=None, school_field=None)
-        return qs
+        # 按当前用户 scope 收敛：省级看全部，其余角色看自己辖区及下级
+        # 注意：Region 模型自身就是行政区，不能用 filter_by_scope 的 region/school 字段收敛
+        user = self.request.user
+        if user.is_superuser or user.role in (User.ROLE_PROVINCE, User.ROLE_QB_ADMIN):
+            return qs
+        if user.region_id is None:
+            return qs.none()
+        return qs.filter(id__in=get_descendant_region_ids(user.region))
 
 
 class SchoolViewSet(BaseViewSet):

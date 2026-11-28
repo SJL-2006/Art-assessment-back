@@ -10,14 +10,14 @@ from django.db.models import Q, QuerySet
 from apps.users.models import User
 
 
-def _get_descendant_region_ids(region) -> list:
+def get_descendant_region_ids(region) -> list:
     """递归拿到某行政区自身 + 所有子孙的 ID 列表（支持省→市→区三级）。"""
     if region is None:
         return []
     ids = [region.id]
     children = region.children.all()
     for child in children:
-        ids.extend(_get_descendant_region_ids(child))
+        ids.extend(get_descendant_region_ids(child))
     return ids
 
 
@@ -61,7 +61,7 @@ def filter_by_scope(
     if role == User.ROLE_CITY:
         if user.region_id is None:
             return qs.none()
-        region_ids = _get_descendant_region_ids(user.region)
+        region_ids = get_descendant_region_ids(user.region)
         region_q = (
             Q(**{f"{region_field}__id__in": region_ids})
             if region_field and hasattr(qs.model, region_field)
@@ -86,7 +86,7 @@ def filter_by_scope(
     if role == User.ROLE_DISTRICT:
         if user.region_id is None:
             return qs.none()
-        region_ids = _get_descendant_region_ids(user.region)
+        region_ids = get_descendant_region_ids(user.region)
         region_q = (
             Q(**{f"{region_field}__id__in": region_ids})
             if region_field and hasattr(qs.model, region_field)

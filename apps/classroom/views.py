@@ -47,6 +47,28 @@ def generate_class_code(length: int = 6) -> str:
             return code
 
 
+def _assert_single_subject(teacher, course):
+    """一个教师只能任教一个学科（music/art），防止同一教师同时拥有两类 ClassTeacher 记录。"""
+    code = (course.code or "").strip()
+    if code not in ("music", "art"):
+        return
+
+    if teacher.teacher_subject and teacher.teacher_subject != code:
+        raise ApiException(
+            f"该教师任教学科为{teacher.get_teacher_subject_display()}，不能同时任教其他学科",
+            code=400, status=400,
+        )
+
+    exists = ClassTeacher.objects.filter(
+        teacher=teacher, is_deleted=False, status=APPROVED,
+    ).exclude(course__code=code).exists()
+    if exists:
+        raise ApiException(
+            "该教师已任教另一学科，不能同时任教音乐和美术",
+            code=400, status=400,
+        )
+
+
 class ClassRoomViewSet(BaseViewSet):
     """班级 CRUD + 业务操作。
 
@@ -260,6 +282,8 @@ class ClassRoomViewSet(BaseViewSet):
         if course is None:
             raise ApiException("任教学科不存在", code=400, status=400)
 
+        _assert_single_subject(request.user, course)
+
         ct = ClassTeacher.objects.filter(klass=klass, teacher=request.user, is_deleted=False).first()
         if ct:
             if ct.status == APPROVED:
@@ -385,6 +409,9 @@ class ClassRoomViewSet(BaseViewSet):
             raise ApiException("未找到该教师的申请记录")
         if ct.status != PENDING:
             raise ApiException("该申请已处理过")
+
+        if approved:
+            _assert_single_subject(ct.teacher, ct.course)
 
         ct.status = APPROVED if approved else REJECTED
         ct.save(update_fields=["status", "updated_at"])

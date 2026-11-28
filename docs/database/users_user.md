@@ -66,3 +66,28 @@ ALTER TABLE `users_user` DROP INDEX `users_user_staff_no_e479af5d`;
 ```sql
 ALTER TABLE `users_user` DROP COLUMN `teacher_type`;
 ```
+
+---
+
+# 第四次变更：teacher_subject 字段添加
+
+- **表名**：users_user
+- **变更类型**：字段添加
+- **SQL 语句**：
+  ```sql
+  ALTER TABLE `users_user` ADD COLUMN `teacher_subject` varchar(16) NOT NULL DEFAULT '';
+  ```
+- **修改日期**：2026-11-28 20:51:52
+- **修改人**：userName
+
+## 变更说明
+
+新增 `teacher_subject`（任教学科）字段，作为教师「单学科约束」的唯一来源：每个教师只能任教一个学科，取值 `music`（音乐）或 `art`（美术）。仅 `role=teacher` 的账号使用，其余角色保持空串默认值。字段允许为空、默认空串，既有数据不受影响。对应迁移 `apps/users/migrations/0005_user_teacher_subject.py`。
+
+配套约束：`ClassRoomViewSet.join_teacher` 与 `approve_teacher` 中新增 `_assert_single_subject` 校验，阻止同一教师同时拥有音乐、美术两学科的 `class_teacher` 记录。
+
+## 回滚方案
+
+```sql
+ALTER TABLE `users_user` DROP COLUMN `teacher_subject`;
+```
