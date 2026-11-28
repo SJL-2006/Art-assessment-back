@@ -517,6 +517,143 @@ class TeacherAnswerSheetDetailView(APIView):
         })
 
 
+# ---------------------------------------------------------------------------
+# 教师端课外材料审核（增量）
+# ---------------------------------------------------------------------------
+
+class TeacherExtracurricularListView(APIView):
+    """GET /api/exam/teacher/extracurricular/  教师审核列表。
+
+    Query 参数：
+    - status: pending / approved / rejected  （空=全部）
+    - klass_id: 班级过滤（空=全部所带班级）
+    - subject: 学科过滤 music/art（空=全部）
+    """
+
+    permission_classes = [has_role(User.ROLE_TEACHER, User.ROLE_SCHOOL)]
+
+    def get(self, request):
+        from django.db.models import Count
+
+        user = request.user
+        qs = ExtracurricularUpload.objects.filter(is_deleted=False).select_related("student")
+
+        # 权限范围：教师只能看自己所带班级学生的；学校管理员看全校
+        if user.role == User.ROLE_TEACHER:
+            student_ids = _teacher_student_ids(user)
+            qs = qs.filter(student_id__in=student_ids)
+
+        # 状态过滤
+        status = request.GET.get("status", "").strip()
+        if status in dict(ExtracurricularUpload.STATUS_CHOICES):
+            qs = qs.filter(status=status)
+
+        # 班级过滤（教师只传自己所带的班级 id）
+        klass_id = request.GET.get("klass_id", "").strip()
+        if klass_id.isdigit():
+            from apps.classroom.models import ClassStudent
+            qs = qs.filter(
+                student_id__in=ClassStudent.objects.filter(
+                    klass_id=int(klass_id), is_deleted=False
+                ).values_list("student_id", flat=True)
+            )
+
+        qs = qs.order_by("-created_at")
+
+        # 分页
+        page = int(request.GET.get("page", 1) or 1)
+        page_size = int(request.GET.get("page_size", 20) or 20)
+        page_size = max(1, min(page_size, 100))
+        total = qs.count()
+        start = (page - 1) * page_size
+        items = qs[start : start + page_size]
+
+        def _row(item):
+            st = item.status
+            return {
+                "id": item.id,
+                "title": item.title,
+                "description": item.description,
+                "image": request.build_absolute_uri(item.image.url) if item.image else "",
+                "status": st,
+                "status_display": dict(ExtracurricularUpload.STATUS_CHOICES).get(st, st),
+                "review_note": item.review_note,
+                "reviewed_at": item.reviewed_at,
+                "created_at": item.created_at,
+                "student": {
+                    "id": item.student.id,
+                    "name": item.student.real_name or item.student.username,
+                    "student_no": item.student.student_no or "",
+                },
+            }
+
+        # 三种状态计数（前端 tab 用，在权限过滤后的 base_qs 基础上）
+        base_qs = ExtracurricularUpload.objects.filter(is_deleted=False)
+        if user.role == User.ROLE_TEACHER:
+            base_qs = base_qs.filter(student_id__in=_teacher_student_ids(user))
+        counts = {
+            "pending":  base_qs.filter(status=ExtracurricularUpload.STATUS_PENDING).count(),
+            "approved": base_qs.filter(status=ExtracurricularUpload.STATUS_APPROVED).count(),
+            "rejected": base_qs.filter(status=ExtracurricularUpload.STATUS_REJECTED).count(),
+        }
+
+        return ApiResponse(data={
+            "list": [_row(i) for i in items],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "counts": counts,
+        })
+
+
+class TeacherExtracurricularReviewView(APIView):
+    """POST /api/exam/teacher/extracurricular/{id}/review/  审核通过或驳回。
+
+    Body:
+        { "action": "approve"|"reject", "note": "可选，审核备注" }
+    """
+
+    permission_classes = [has_role(User.ROLE_TEACHER, User.ROLE_SCHOOL)]
+
+    def post(self, request, pk):
+        from django.utils import timezone
+
+        try:
+            upload = ExtracurricularUpload.objects.get(pk=pk, is_deleted=False)
+        except ExtracurricularUpload.DoesNotExist:
+            raise ApiException("资源不存在", status=404)
+
+        user = request.user
+
+        # 权限：教师只能审核自己所带班级学生的
+        if user.role == User.ROLE_TEACHER:
+            allowed = _teacher_student_ids(user)
+            if upload.student_id not in allowed:
+                raise ApiException("没有操作权限", status=403)
+
+        action = request.data.get("action", "")
+        note = (request.data.get("note") or "").strip()
+
+        action_map = {
+            "approve": ExtracurricularUpload.STATUS_APPROVED,
+            "reject":  ExtracurricularUpload.STATUS_REJECTED,
+        }
+        if action not in action_map:
+            raise ApiException("action 必须是 approve 或 reject", status=400)
+
+        upload.status = action_map[action]
+        upload.review_note = note
+        upload.reviewed_at = timezone.now()
+        upload.save(update_fields=["status", "review_note", "reviewed_at", "updated_at"])
+
+        return ApiResponse(message="审核完成", data={
+            "id": upload.id,
+            "status": upload.status,
+            "status_display": dict(ExtracurricularUpload.STATUS_CHOICES).get(upload.status),
+            "reviewed_at": upload.reviewed_at,
+        })
+
+
 class TeacherAnswerSheetScoreView(APIView):
     """POST /api/exam/teacher/answer-sheets/{id}/score/  教师对答卷逐题打分（覆盖自动判分结果）。
 

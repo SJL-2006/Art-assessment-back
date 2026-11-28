@@ -152,4 +152,15 @@ urlpatterns = [
         score_views.TeacherAnswerSheetScoreView.as_view(),
         name="teacher_answer_sheet_score",
     ),
+    # 教师视角：课外材料审核
+    path(
+        "teacher/extracurricular/",
+        score_views.TeacherExtracurricularListView.as_view(),
+        name="teacher_extracurricular_list",
+    ),
+    path(
+        "teacher/extracurricular/<int:pk>/review/",
+        score_views.TeacherExtracurricularReviewView.as_view(),
+        name="teacher_extracurricular_review",
+    ),
 ] + router.urls

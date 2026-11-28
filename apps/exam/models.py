@@ -200,6 +200,16 @@ class PerformanceScore(BaseModel):
 
 class ExtracurricularUpload(BaseModel):
     """学生课外自主学习成果（图片）。"""
+
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "待审核"),
+        (STATUS_APPROVED, "已通过"),
+        (STATUS_REJECTED, "已驳回"),
+    ]
+
     student = models.ForeignKey(
         "users.User", on_delete=models.CASCADE,
         related_name="extracurricular_uploads", verbose_name="学生",
@@ -207,6 +217,12 @@ class ExtracurricularUpload(BaseModel):
     title = models.CharField("标题", max_length=128)
     image = models.FileField("图片", upload_to="extracurricular/%Y/%m/")
     description = models.TextField("说明", blank=True)
+    status = models.CharField(
+        "审核状态", max_length=16, choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
+    reviewed_at = models.DateTimeField("审核时间", null=True, blank=True)
+    review_note = models.CharField("审核备注", max_length=255, blank=True)
 
     class Meta:
         db_table = "exam_extracurricular_upload"
