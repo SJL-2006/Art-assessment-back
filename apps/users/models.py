@@ -32,6 +32,14 @@ class User(AbstractUser):
         (TEACHER_TYPE_SUBJECT, "科任老师"),
     ]
 
+    # 教师任教学科（唯一来源；仅 role=teacher 使用，其他角色为空串）
+    TEACHER_SUBJECT_MUSIC = "music"
+    TEACHER_SUBJECT_ART = "art"
+    TEACHER_SUBJECT_CHOICES = [
+        (TEACHER_SUBJECT_MUSIC, "音乐"),
+        (TEACHER_SUBJECT_ART, "美术"),
+    ]
+
     role = models.CharField("角色", max_length=16, choices=ROLE_CHOICES, default=ROLE_STUDENT)
     real_name = models.CharField("真实姓名", max_length=32, blank=True)
     phone = models.CharField("手机号", max_length=20, blank=True)
@@ -40,6 +48,9 @@ class User(AbstractUser):
     staff_no = models.CharField("职工编号", max_length=64, blank=True, db_index=True)
     teacher_type = models.CharField(
         "教师类型", max_length=16, blank=True, default="", choices=TEACHER_TYPE_CHOICES,
+    )
+    teacher_subject = models.CharField(
+        "任教学科", max_length=16, blank=True, default="", choices=TEACHER_SUBJECT_CHOICES,
     )
     bio = models.TextField("简介", blank=True)
 

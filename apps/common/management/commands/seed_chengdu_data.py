@@ -258,21 +258,24 @@ class Command(BaseCommand):
 
         staff_seq = 0
 
-        def build_teacher(real_name, teacher_type):
+        def build_teacher(real_name, teacher_type, teacher_subject):
             nonlocal staff_seq
             staff_seq += 1
             staff_no = f"{school_seq:05d}{staff_seq:03d}"
             return User(
                 username=staff_no, role=User.ROLE_TEACHER, real_name=real_name,
                 staff_no=staff_no, student_no="", school=school, region=region,
-                teacher_type=teacher_type,
+                teacher_type=teacher_type, teacher_subject=teacher_subject,
                 password=password_hash, is_active=True, is_staff=False, is_superuser=False,
                 date_joined=now,
             )
 
-        music_users = [build_teacher(n, User.TEACHER_TYPE_SUBJECT) for n in music_names]
-        art_users = [build_teacher(n, User.TEACHER_TYPE_SUBJECT) for n in art_names]
-        head_users = [build_teacher(n, User.TEACHER_TYPE_HEAD) for n in head_names]
+        music_users = [build_teacher(n, User.TEACHER_TYPE_SUBJECT, "music") for n in music_names]
+        art_users = [build_teacher(n, User.TEACHER_TYPE_SUBJECT, "art") for n in art_names]
+        head_users = [
+            build_teacher(n, User.TEACHER_TYPE_HEAD, "music" if i % 2 == 0 else "art")
+            for i, n in enumerate(head_names)
+        ]
         teacher_objs = music_users + art_users + head_users
         User.objects.bulk_create(teacher_objs, batch_size=500)
         staff_nos = [u.username for u in teacher_objs]
