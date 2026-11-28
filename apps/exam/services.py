@@ -26,6 +26,48 @@ OBJECTIVE_TYPES = {"single", "multiple", "judge"}
 # 及格线（60%）
 PASS_RATIO = Decimal("0.6")
 
+# 年级中文标签（用于把前端/历史数据里的代码归一为可展示的中文）
+GRADE_LABELS = (
+    "一年级", "二年级", "三年级", "四年级", "五年级", "六年级",
+    "七年级", "八年级", "九年级", "高一", "高二", "高三",
+)
+
+
+def normalize_grade_label(value) -> str:
+    """把年级代码/文本归一为中文年级；无法识别时返回空字符串。
+
+    兼容：1 / 1年级 / grade1 / g1 / nj1 / 小学一年级 / 一年级。
+    """
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    for label in GRADE_LABELS:
+        if label in text:
+            return label
+    match = re.search(r"\d+", text)
+    if match:
+        number = int(match.group())
+        if 1 <= number <= 9:
+            return GRADE_LABELS[number - 1]
+    # 含英文字母的未知值视为代码，不展示
+    if re.search(r"[A-Za-z]", text):
+        return ""
+    return text
+
+
+def grade_variants(value) -> list:
+    """年级筛选参数的等价写法，兼容库里存的是代码或中文。"""
+    variants = set()
+    if value:
+        variants.add(str(value).strip())
+    label = normalize_grade_label(value)
+    if label:
+        variants.add(label)
+        if label in GRADE_LABELS[:9]:
+            number = GRADE_LABELS.index(label) + 1
+            variants.update({str(number), f"{number}年级", f"grade{number}", f"g{number}", f"nj{number}"})
+    return sorted(v for v in variants if v)
+
 
 # --------------------------------------------------------------------------
 # 数据范围

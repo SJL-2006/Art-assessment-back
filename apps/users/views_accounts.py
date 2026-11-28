@@ -23,8 +23,9 @@ from apps.classroom.models import APPROVED, ClassRoom
 from apps.common.exceptions import ApiException
 from apps.common.permissions import has_role
 from apps.common.response import ApiResponse
-from apps.common.scopes import filter_by_scope
+from apps.common.scopes import filter_by_scope, get_descendant_region_ids
 from apps.common.views import BaseViewSet
+from apps.org.models import Region
 from apps.users.models import User
 from apps.users.serializers import (
     AccountManageSerializer,
@@ -88,6 +89,23 @@ class AccountViewSet(BaseViewSet):
         directly = self.request.query_params.get("directly_affiliated")
         if directly is not None:
             qs = qs.filter(school__is_directly_affiliated=directly in ("1", "true", "True"))
+        # 按行政区过滤：region / district / city 任传其一，自动展开为该区划及下级
+        region_param = (
+            self.request.query_params.get("region")
+            or self.request.query_params.get("district")
+            or self.request.query_params.get("city")
+        )
+        if region_param:
+            try:
+                region = Region.objects.filter(pk=region_param, is_deleted=False).first()
+            except (ValueError, TypeError):
+                region = None
+            if region is None:
+                return qs.none()
+            region_ids = get_descendant_region_ids(region)
+            qs = qs.filter(
+                Q(region_id__in=region_ids) | Q(school__region_id__in=region_ids),
+            ).distinct()
         # 教师：仅自己所带班级（班主任 / 已通过科任）中审核通过的学生
         if self.request.user.role == User.ROLE_TEACHER:
             classes = ClassRoom.objects.filter(

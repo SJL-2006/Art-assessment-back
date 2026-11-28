@@ -678,8 +678,10 @@ class GradeOptionsView(APIView):
             .distinct()
         )
         for grade in used:
-            if grade and grade not in grades:
-                grades.append(grade)
+            # 历史/导入数据里可能存的是代码，统一归一为中文年级，无法识别的直接丢弃
+            label = services.normalize_grade_label(grade)
+            if label and label not in grades:
+                grades.append(label)
         return ApiResponse(data=[{"value": grade, "label": grade} for grade in grades])
 
 

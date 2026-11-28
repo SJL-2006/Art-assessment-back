@@ -146,14 +146,24 @@ def validate_role_creation(caller, target_role):
 class AccountManageSerializer(serializers.ModelSerializer):
     """#28-32 后台账号管理：role 由调用方指定，字段随 role 而异。"""
 
+    school_name = serializers.SerializerMethodField()
+    region_name = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
             "id", "username", "password", "real_name", "phone", "avatar",
-            "role", "student_no", "staff_no", "school", "region", "email", "is_active", "date_joined",
+            "role", "student_no", "staff_no", "school", "school_name",
+            "region", "region_name", "email", "is_active", "date_joined",
         ]
         read_only_fields = ["id", "date_joined"]
         extra_kwargs = {"password": {"write_only": True, "required": False}}
+
+    def get_school_name(self, obj):
+        return obj.school.name if obj.school_id else ""
+
+    def get_region_name(self, obj):
+        return obj.region.name if obj.region_id else ""
 
     def validate_role(self, value):
         request = self.context.get("request")

@@ -48,8 +48,11 @@ def _filtered_sheets(request):
 
     grade = params.get("grade")
     if grade:
-        students = students.filter(class_memberships__klass__grade=grade,
-                                   class_memberships__status=services.APPROVED)
+        # 兼容库里存代码 / 前端传中文两种情况
+        students = students.filter(
+            class_memberships__klass__grade__in=services.grade_variants(grade),
+            class_memberships__status=services.APPROVED,
+        )
 
     sheets = (
         AnswerSheet.objects.filter(is_submitted=True, is_deleted=False, student__in=students)
@@ -151,8 +154,11 @@ def _build_stats(request):
 
     summary, rows = _summary(sheets, students)
     by_subject = _group(rows, lambda r: r["paper__subject"], lambda r: _subject_label(r["paper__subject"]))
-    by_grade = _group(rows, lambda r: r["paper__grade"] or "未填年级",
-                      lambda r: r["paper__grade"] or "未填年级")
+    by_grade = _group(
+        rows,
+        lambda r: services.normalize_grade_label(r["paper__grade"]) or "未填年级",
+        lambda r: services.normalize_grade_label(r["paper__grade"]) or "未填年级",
+    )
     by_school = _group(rows, lambda r: r["student__school__name"] or "",
                        lambda r: r["student__school__name"] or "")
     by_region = _group(rows, lambda r: r["student__school__region__name"] or "未填地区",
