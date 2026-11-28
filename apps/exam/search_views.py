@@ -27,8 +27,9 @@ class GlobalSearchView(APIView):
 
     permission_classes = [
         has_role(
-            User.ROLE_TEACHER, User.ROLE_SCHOOL, User.ROLE_DISTRICT,
-            User.ROLE_CITY, User.ROLE_PROVINCE, User.ROLE_QB_ADMIN,
+            User.ROLE_STUDENT, User.ROLE_TEACHER, User.ROLE_SCHOOL,
+            User.ROLE_DISTRICT, User.ROLE_CITY, User.ROLE_PROVINCE,
+            User.ROLE_QB_ADMIN,
         )
     ]
 
@@ -66,7 +67,15 @@ class GlobalSearchView(APIView):
                 return qs.filter(school__region_id=user.region_id)
             if user.role == User.ROLE_SCHOOL:
                 return qs.filter(school_id=user.school_id)
-            # 教师只能搜自己带的班级（班主任 or 科任）
+            if user.role == User.ROLE_STUDENT:
+                # 学生：自己所在的班级
+                return qs.filter(
+                    students__student=user,
+                    students__status=APPROVED,
+                    students__is_deleted=False,
+                    is_deleted=False,
+                ).distinct()
+            # 教师：自己带的班级（班主任 or 科任）
             return qs.filter(Q(head_teacher=user) | Q(teachers__teacher=user)).distinct()
 
         def scope_papers(qs):
@@ -78,7 +87,12 @@ class GlobalSearchView(APIView):
                 return qs.filter(creator__school__region_id=user.region_id)
             if user.role == User.ROLE_SCHOOL:
                 return qs.filter(creator__school_id=user.school_id)
-            # 教师只看自己创建的
+            if user.role == User.ROLE_STUDENT:
+                # 学生：看到同校所有已发布的试卷（兼容 creator 未挂 school 的历史数据）
+                return qs.filter(status=Paper.STATUS_PUBLISHED).filter(
+                    Q(creator__school_id=user.school_id) | Q(creator__school_id__isnull=True)
+                )
+            # 教师：自己创建的
             return qs.filter(creator=user)
 
         def scope_students(qs):
